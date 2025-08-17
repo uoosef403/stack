@@ -1,0 +1,7 @@
+.idea
+cmake-*
+libtins
+build
+.vcpkg
+.cache
+.venv
