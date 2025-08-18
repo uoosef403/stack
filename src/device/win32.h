@@ -24,6 +24,8 @@ namespace stack::device {
         asio::awaitable<void> run_reader(IPPacketChannel& incoming_channel) override;
         asio::awaitable<void> run_writer(IPPacketChannel& outgoing_channel) override;
 
+        bool configure(const std::string &ip_addr, const std::string &netmask) const;
+
         /**
          * @brief Factory method to create and open a new TUN device on Windows.
          */
@@ -58,6 +60,7 @@ namespace stack::device {
         WINTUN_RELEASE_RECEIVE_PACKET_FUNC m_WintunReleaseReceivePacket = nullptr;
         WINTUN_ALLOCATE_SEND_PACKET_FUNC m_WintunAllocateSendPacket = nullptr;
         WINTUN_SEND_PACKET_FUNC m_WintunSendPacket = nullptr;
+        GUID m_guid{};
     };
 
 } // namespace stack::device

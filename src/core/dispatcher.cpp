@@ -26,7 +26,7 @@ asio::awaitable<void> Dispatcher::run() {
 
       if (ip_version == 4) {
         try {
-          Tins::IP ip_packet(packet_data.data(), packet_data.size());
+          Tins::IP ip_packet(packet_data.data(), static_cast<uint32_t>(packet_data.size()));
           if (auto it = handlers_.find(ip_packet.protocol());
               it != handlers_.end()) {
             it->second->handle_ipv4(ip_packet);
@@ -37,7 +37,7 @@ asio::awaitable<void> Dispatcher::run() {
         }
       } else if (ip_version == 6) {
         try {
-          Tins::IPv6 ipv6_packet(packet_data.data(), packet_data.size());
+          Tins::IPv6 ipv6_packet(packet_data.data(), static_cast<uint32_t>(packet_data.size()));
           if (auto it = handlers_.find(ipv6_packet.next_header());
               it != handlers_.end()) {
             it->second->handle_ipv6(ipv6_packet);
