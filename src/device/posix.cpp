@@ -44,7 +44,7 @@ namespace stack::device
     PosixTun::~PosixTun()
     {
         if (fd_ >= 0) {
-            fmt::print("Closing TUN device: {}\n", name_);
+            fmt::println(stderr, "Closing TUN device: {}\n", name_);
             if (asio_descriptor_.is_open())
             {
                 asio_descriptor_.close();
@@ -64,7 +64,7 @@ namespace stack::device
                         ioctl(sock.fd, SIOCSIFFLAGS, &ifr);
                     }
                 } catch (const std::exception &e) {
-                    fmt::print("Error during TUN device cleanup: {}\n", e.what());
+                    fmt::println(stderr, "Error during TUN device cleanup: {}\n", e.what());
                 }
             }
         }
@@ -151,7 +151,7 @@ namespace stack::device
         ifreq ifr{};
         if ((fd_ = ::open("/dev/net/tun", O_RDWR | O_NONBLOCK)) < 0)
         {
-            fmt::println("Failed to open /dev/net/tun: {}", strerror(errno));
+            fmt::println(stderr, "Failed to open /dev/net/tun: {}", strerror(errno));
             return false;
         }
 
@@ -161,20 +161,87 @@ namespace stack::device
 
         if (ioctl(fd_, TUNSETIFF, static_cast<void*>(&ifr)) < 0)
         {
-            fmt::println("ioctl(TUNSETIFF) failed for device '{}': {}", name,
+            fmt::println(stderr, "ioctl(TUNSETIFF) failed for device '{}': {}", name,
                          strerror(errno));
             ::close(fd_);
             return false;
         }
 
-
         name_ = ifr.ifr_name;
 
-        fmt::print("Created TUN device: {}\n", name_);
+        fmt::println(stderr, "Created TUN device: {}\n", name_);
 
-        return this->assign(fd_); // Call assign internally
+        if (!set_ip("192.168.69.69") || !set_netmask("255.255.255.0") || !set_if_up())
+        {
+            fmt::println(stderr, "unable assign ip or bring the interface up!, do it yourself");
+            return false;
+        }
+
+        return assign(fd_); // Call assign internally
     }
 
+    bool PosixTun::set_ip(const std::string& ip_addr) const {
+        IoctlSocket sock;
+        ifreq ifr{};
+        std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
+
+        auto *addr = reinterpret_cast<sockaddr_in *>(&ifr.ifr_addr);
+        addr->sin_family = AF_INET;
+        if (inet_pton(AF_INET, ip_addr.c_str(), &addr->sin_addr) != 1) {
+            fmt::print(stderr, "Invalid IP address format for: {}", ip_addr);
+            return false;
+        }
+
+        if (ioctl(sock.fd, SIOCSIFADDR, &ifr) < 0) {
+            fmt::println(stderr, "Failed to set IP address");
+            return false;
+        }
+
+        return true;
+    }
+
+    bool PosixTun::set_netmask(const std::string& netmask) const {
+        IoctlSocket sock;
+        ifreq ifr{};
+        std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
+
+        auto *addr = reinterpret_cast<sockaddr_in *>(&ifr.ifr_addr);
+        addr->sin_family = AF_INET;
+        if (inet_pton(AF_INET, netmask.c_str(), &addr->sin_addr) != 1) {
+            fmt::println(stderr, "Invalid netmask format for: {}", netmask);
+            return false;
+        }
+
+        // NOTE: SIOCSIFNETMASK also uses the ifr_addr field, not a separate
+        // ifr_netmask.
+        if (ioctl(sock.fd, SIOCSIFNETMASK, &ifr) < 0) {
+            fmt::println(stderr, "Failed to set netmask");
+            return false;
+        }
+
+        return true;
+    }
+
+    bool PosixTun::set_if_up() const {
+        IoctlSocket sock;
+        ifreq ifr{};
+        std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
+
+        if (ioctl(sock.fd, SIOCGIFFLAGS, &ifr) < 0) {
+            fmt::println(stderr, "Failed to get interface flags");
+            return false;
+        }
+
+        ifr.ifr_flags |= (IFF_UP | IFF_RUNNING);
+
+        if (ioctl(sock.fd, SIOCSIFFLAGS, &ifr) < 0) {
+            fmt::println(stderr, "Failed to bring interface up");
+            return false;
+        }
+
+        return true;
+    }
+    
     std::unique_ptr<Tun> PosixTun::create(asio::io_context& io_context,
                                           const std::string& name)
     {
@@ -186,7 +253,7 @@ namespace stack::device
             return nullptr;
         }
 
-        fmt::println("Successfully created TUN device '{}'", name);
+        fmt::println(stderr, "Successfully created TUN device '{}'", name);
         return tun;
     }
 
@@ -195,10 +262,10 @@ namespace stack::device
         auto tun = std::unique_ptr<PosixTun>(new PosixTun(io_context));
         if (!tun->assign(fd))
         {
-            fmt::println("Failed to assign existing file descriptor {}.", fd);
+            fmt::println(stderr, "Failed to assign existing file descriptor {}.", fd);
             return nullptr;
         }
-        fmt::println("Wrapping existing file descriptor {} as TUN device.", fd);
+        fmt::println(stderr, "Wrapping existing file descriptor {} as TUN device.", fd);
         return tun;
     }
 } // namespace stack::device

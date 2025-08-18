@@ -36,6 +36,9 @@ namespace stack::device
     private:
         explicit PosixTun(asio::io_context& io_context);
         bool open(const std::string& name);
+        bool set_ip(const std::string& ip_addr) const;
+        bool set_netmask(const std::string& netmask) const;
+        bool set_if_up() const;
         bool assign(int fd);
 
         int fd_ = -1;
