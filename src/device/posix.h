@@ -2,14 +2,15 @@
 #if defined(__linux__) || defined(__ANDROID__)
 
 #include "tun.h"
-#include "asio/posix/stream_descriptor.hpp"
 
-namespace stack::device {
-
+namespace stack::device
+{
     /**
-     * @brief POSIX-specific implementation of the Tun interface (for Linux, Android).
+     * @brief POSIX-specific implementation of the Tun interface (for Linux,
+     * Android).
      */
-    class PosixTun final : public Tun {
+    class PosixTun final : public Tun
+    {
     public:
         ~PosixTun() override;
 
@@ -18,13 +19,14 @@ namespace stack::device {
         PosixTun(PosixTun&&) = delete;
         PosixTun& operator=(PosixTun&&) = delete;
 
-        asio::awaitable<size_t> async_read_some(const asio::mutable_buffer& buffer) override;
-        asio::awaitable<size_t> async_write_some(const asio::const_buffer& buffer) override;
+        asio::awaitable<void> run_reader(IPPacketChannel& incoming_channel) override;
+        asio::awaitable<void> run_writer(IPPacketChannel& outgoing_channel) override;
 
         /**
          * @brief Factory method to create a new TUN device.
          */
-        static std::unique_ptr<Tun> create(asio::io_context& io_context, const std::string& name);
+        static std::unique_ptr<Tun> create(asio::io_context& io_context,
+                                           const std::string& name);
 
         /**
          * @brief Factory method to wrap an existing TUN file descriptor.
@@ -36,9 +38,11 @@ namespace stack::device {
         bool open(const std::string& name);
         bool assign(int fd);
 
-        asio::posix::stream_descriptor m_descriptor;
+        int fd_ = -1;
+        std::string name_;
+        bool from_fd_ = true;
+        asio::posix::stream_descriptor asio_descriptor_;
     };
-
 } // namespace stack::device
 
 #endif

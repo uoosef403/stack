@@ -34,8 +34,6 @@ if [ "$TARGET_OS" == "linux" ]; then
 	VCPKG_TRIPLET="$TARGET_ARCH-linux"
 	TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 	BUILD_DIR="cmake-build-$TARGET_OS-$TARGET_ARCH"
-	export CC=clang
-	export CXX=clang++
 elif [ "$TARGET_OS" == "windows" ]; then
 	VCPKG_TRIPLET="$TARGET_ARCH-mingw-static"
 	TOOLCHAIN_FILE="cross-windows-x64.cmake" # Our custom toolchain
