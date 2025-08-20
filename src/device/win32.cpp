@@ -20,9 +20,26 @@ namespace stack::device {
     }
 
     Win32Tun::~Win32Tun() {
-        if (m_session && m_WintunEndSession) m_WintunEndSession(m_session);
-        if (m_adapter && m_WintunCloseAdapter) m_WintunCloseAdapter(m_adapter);
-        if (m_wintun_dll) FreeLibrary(m_wintun_dll);
+        if (m_session && m_WintunEndSession) {
+            m_WintunEndSession(m_session);
+            m_session = nullptr;
+        }
+
+        if (m_adapter) {
+            if (m_WintunDeleteAdapter) {
+                // Remove the adapter from the system entirely
+                m_WintunDeleteAdapter(m_adapter, 0, nullptr);
+            } else if (m_WintunCloseAdapter) {
+                // Fallback: just close handle, leaves adapter orphaned
+                m_WintunCloseAdapter(m_adapter);
+            }
+            m_adapter = nullptr;
+        }
+
+        if (m_wintun_dll) {
+            FreeLibrary(m_wintun_dll);
+            m_wintun_dll = nullptr;
+        }
     }
 
     // --- Factory Method ---
@@ -37,7 +54,7 @@ namespace stack::device {
     namespace {
         // A helper to get a descriptive error message from a Windows error code.
         std::string get_error_string(DWORD error_code) {
-            char* buffer = nullptr;
+            char *buffer = nullptr;
             size_t size = FormatMessageA(
                 FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                 nullptr, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -57,7 +74,7 @@ namespace stack::device {
         }
 
         // Converts an IPv4 netmask string to a CIDR prefix length.
-        UCHAR netmask_to_prefix_length(const std::string& netmask) {
+        UCHAR netmask_to_prefix_length(const std::string &netmask) {
             IN_ADDR addr;
             if (InetPtonA(AF_INET, netmask.c_str(), &addr) != 1) {
                 return 0; // Invalid format
@@ -98,6 +115,8 @@ namespace stack::device {
             m_wintun_dll, "WintunAllocateSendPacket"));
         m_WintunSendPacket = reinterpret_cast<WINTUN_SEND_PACKET_FUNC>(GetProcAddress(
             m_wintun_dll, "WintunSendPacket"));
+        m_WintunDeleteAdapter = reinterpret_cast<WINTUN_DELETE_ADAPTER_FUNC>(GetProcAddress(
+            m_wintun_dll, "WintunDeleteAdapter"));
 
         if (!m_WintunCreateAdapter || !m_WintunStartSession || !m_WintunReceivePacket || !m_WintunSendPacket) {
             fmt::println("Failed to get one or more critical Wintun functions from wintun.dll");
@@ -135,8 +154,9 @@ namespace stack::device {
             return false;
         }
 
-        if (!configure("192.168.69.69", "255.255.255.0")) {
-            fmt::println(stderr, "Failed to assign ip to Wintun adapter, do this yourself");
+        if (!configure("192.168.69.69", "255.255.255.0",
+                       "fd69::69", 64)) {
+            fmt::println(stderr, "Failed to assign IPs to Wintun adapter, do this yourself");
         }
 
         m_read_handle.assign(read_handle);
@@ -145,7 +165,7 @@ namespace stack::device {
         return true;
     }
 
-    asio::awaitable<void> Win32Tun::run_reader(IPPacketChannel& incoming_channel) {
+    asio::awaitable<void> Win32Tun::run_reader(IPPacketChannel &incoming_channel) {
         try {
             while (true) {
                 std::vector<uint8_t> buffer(2048);
@@ -178,7 +198,8 @@ namespace stack::device {
             incoming_channel.close();
         }
     }
-    asio::awaitable<void> Win32Tun::run_writer(IPPacketChannel& outgoing_channel) {
+
+    asio::awaitable<void> Win32Tun::run_writer(IPPacketChannel &outgoing_channel) {
         try {
             while (true) {
                 auto [ec, buffer] = co_await outgoing_channel.async_receive(
@@ -207,110 +228,109 @@ namespace stack::device {
     }
 
     /**
-     * @brief Configures the Wintun adapter's IP address, subnet, and brings it online.
+     * @brief Configures the Wintun adapter's IPv4 and IPv6 addresses.
      *
-     * This function is designed to be robust. It reliably finds the adapter using the
-     * GUID it was created with, flushes any pre-existing IP addresses to prevent
-     * conflicts, sets the new IP configuration, and enables the adapter.
+     * This function:
+     *  - Converts the adapter GUID into a LUID
+     *  - Removes existing addresses
+     *  - Sets the provided IPv4 and IPv6 addresses
      *
-     * @param ip_addr The desired IPv4 address (e.g., "10.8.0.1").
-     * @param netmask The desired IPv4 subnet mask (e.g., "255.255.255.0").
-     * @return True on success, false on failure.
+     * @param ipv4_addr IPv4 address (e.g., "192.168.69.69").
+     * @param netmask   IPv4 subnet mask (e.g., "255.255.255.0").
+     * @param ipv6_addr (Optional) IPv6 address (e.g., "fd00::1").
+     * @param ipv6_prefix_len (Optional) IPv6 prefix length (e.g., 64).
+     * @return True if at least IPv4 configuration succeeded.
      */
-    bool Win32Tun::configure(const std::string& ip_addr, const std::string& netmask) const {
-        // This function requires the adapter to have been created via open() first.
+    bool Win32Tun::configure(const std::string &ipv4_addr,
+                             const std::string &netmask,
+                             const std::string &ipv6_addr = "",
+                             uint8_t ipv6_prefix_len = 0) const {
         if (!m_adapter) {
             fmt::print(stderr, "Configuration failed: Wintun adapter is not open.\n");
             return false;
         }
 
-        // 1. Find the adapter's LUID and Index by its GUID.
-        // We retry for a short period, as the adapter might take a moment to be visible to the OS.
-        std::optional<NET_LUID> luid_opt;
-
-        RPC_CSTR guid_str_rpc;
-        if (UuidToStringA(&m_guid, &guid_str_rpc) != RPC_S_OK) {
-            fmt::print(stderr, "Failed to convert adapter GUID to string.\n");
+        // Directly get the adapter's LUID from the GUID
+        NET_LUID luid;
+        if (ConvertInterfaceGuidToLuid(&m_guid, &luid) != NO_ERROR) {
+            fmt::print(stderr, "Could not convert GUID to LUID.\n");
             return false;
         }
-        std::string target_guid_str = reinterpret_cast<char*>(guid_str_rpc);
-        RpcStringFreeA(&guid_str_rpc);
 
-        for (int attempt = 0; attempt < 10; ++attempt) { // Retry for up to 1 second
-            ULONG buffer_size = 0;
-            GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, nullptr, nullptr, &buffer_size);
-            if (buffer_size == 0) continue;
-
-            std::vector<BYTE> buffer(buffer_size);
-            auto* adapters = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data());
-
-            if (GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, nullptr, adapters, &buffer_size) == NO_ERROR) {
-                for (auto* curr = adapters; curr != nullptr; curr = curr->Next) {
-                    // AdapterName is the GUID string like "{...}"
-                    if (target_guid_str.compare(curr->AdapterName) == 0) {
-                        luid_opt = curr->Luid;
-                        break;
+        // Flush existing IPs
+        for (int family: {AF_INET, AF_INET6}) {
+            PMIB_UNICASTIPADDRESS_TABLE table = nullptr;
+            if (GetUnicastIpAddressTable(family, &table) == NO_ERROR) {
+                for (ULONG i = 0; i < table->NumEntries; ++i) {
+                    if (table->Table[i].InterfaceLuid.Value == luid.Value) {
+                        DeleteUnicastIpAddressEntry(&table->Table[i]);
                     }
                 }
+                FreeMibTable(table);
             }
-            if (luid_opt) break;
-            Sleep(100); // Wait and retry
         }
 
-        if (!luid_opt) {
-            fmt::print(stderr, "Could not find Wintun adapter with GUID {}. The adapter may have failed to initialize.\n", target_guid_str);
-            return false;
-        }
+        bool success = true;
 
-        // 2. Flush any existing IP addresses on this interface to ensure a clean slate.
-        PMIB_UNICASTIPADDRESS_TABLE table = nullptr;
-        if (GetUnicastIpAddressTable(AF_INET, &table) == NO_ERROR) {
-            for (ULONG i = 0; i < table->NumEntries; ++i) {
-                if (table->Table[i].InterfaceLuid.Value == luid_opt->Value) {
-                    // This is a best-effort deletion. We don't fail if it doesn't work.
-                    DeleteUnicastIpAddressEntry(&table->Table[i]);
+        // ---------------- IPv4 ----------------
+        if (!ipv4_addr.empty()) {
+            MIB_UNICASTIPADDRESS_ROW row4;
+            InitializeUnicastIpAddressEntry(&row4);
+            row4.InterfaceLuid = luid;
+            row4.Address.si_family = AF_INET;
+
+            if (InetPtonA(AF_INET, ipv4_addr.c_str(), &row4.Address.Ipv4.sin_addr) != 1) {
+                fmt::print(stderr, "Invalid IPv4 address: {}\n", ipv4_addr);
+                success = false;
+            } else {
+                row4.OnLinkPrefixLength = netmask_to_prefix_length(netmask);
+                row4.DadState = IpDadStatePreferred;
+                row4.PrefixOrigin = IpPrefixOriginManual;
+                row4.SuffixOrigin = IpSuffixOriginManual;
+                row4.ValidLifetime = 0xFFFFFFFF;
+                row4.PreferredLifetime = 0xFFFFFFFF;
+
+                DWORD result = CreateUnicastIpAddressEntry(&row4);
+                if (result != NO_ERROR) {
+                    fmt::print(stderr, "Failed to set IPv4 address {}: {}\n",
+                               ipv4_addr, get_error_string(result));
+                    success = false;
+                } else {
+                    fmt::println("Configured IPv4: {}/{}", ipv4_addr, netmask);
                 }
             }
-            FreeMibTable(table);
         }
 
-        // 3. Set the new IPv4 address and subnet mask.
-        MIB_UNICASTIPADDRESS_ROW ip_row;
-        InitializeUnicastIpAddressEntry(&ip_row);
-        ip_row.InterfaceLuid = *luid_opt;
-        ip_row.Address.si_family = AF_INET;
+        // ---------------- IPv6 ----------------
+        if (!ipv6_addr.empty() && ipv6_prefix_len > 0) {
+            MIB_UNICASTIPADDRESS_ROW row6;
+            InitializeUnicastIpAddressEntry(&row6);
+            row6.InterfaceLuid = luid;
+            row6.Address.si_family = AF_INET6;
 
-        if (InetPtonA(AF_INET, ip_addr.c_str(), &ip_row.Address.Ipv4.sin_addr) != 1) {
-            fmt::print(stderr, "Invalid IP address format: {}.\n", ip_addr);
-            return false;
-        }
-
-        ip_row.OnLinkPrefixLength = netmask_to_prefix_length(netmask);
-        if (ip_row.OnLinkPrefixLength == 0 && netmask != "0.0.0.0") {
-            fmt::print(stderr, "Invalid netmask format: {}.\n", netmask);
-            return false;
-        }
-
-        // Set standard properties for a manually configured IP.
-        ip_row.DadState = IpDadStatePreferred;
-        ip_row.PrefixOrigin = IpPrefixOriginManual;
-        ip_row.SuffixOrigin = IpSuffixOriginManual;
-        ip_row.ValidLifetime = 0xFFFFFFFF;   // Infinite
-        ip_row.PreferredLifetime = 0xFFFFFFFF; // Infinite
-
-        DWORD result = CreateUnicastIpAddressEntry(&ip_row);
-        if (result != NO_ERROR) {
-            if (result == ERROR_ACCESS_DENIED) {
-                 fmt::print(stderr, "Permission denied to set IP address. Please run as Administrator.\n");
+            if (InetPtonA(AF_INET6, ipv6_addr.c_str(), &row6.Address.Ipv6.sin6_addr) != 1) {
+                fmt::print(stderr, "Invalid IPv6 address: {}\n", ipv6_addr);
+                success = false;
             } else {
-                 fmt::print(stderr, "Failed to set IP address. Error: {}\n", get_error_string(result));
+                row6.OnLinkPrefixLength = ipv6_prefix_len;
+                row6.DadState = IpDadStatePreferred;
+                row6.PrefixOrigin = IpPrefixOriginManual;
+                row6.SuffixOrigin = IpSuffixOriginManual;
+                row6.ValidLifetime = 0xFFFFFFFF;
+                row6.PreferredLifetime = 0xFFFFFFFF;
+
+                DWORD result = CreateUnicastIpAddressEntry(&row6);
+                if (result != NO_ERROR) {
+                    fmt::print(stderr, "Failed to set IPv6 address {}: {}\n",
+                               ipv6_addr, get_error_string(result));
+                    success = false;
+                } else {
+                    fmt::println("Configured IPv6: {}/{}", ipv6_addr, ipv6_prefix_len);
+                }
             }
-            return false;
         }
 
-        // no need to bring wintun up because its aleady up
-        fmt::println("Successfully configured TUN device: IP={}, Netmask={}", ip_addr, netmask);
-        return true;
+        return success;
     }
 } // namespace stack::device
 #endif // _WIN32
