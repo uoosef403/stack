@@ -260,7 +260,7 @@ namespace stack::device {
         // Flush existing IPs
         for (int family: {AF_INET, AF_INET6}) {
             PMIB_UNICASTIPADDRESS_TABLE table = nullptr;
-            if (GetUnicastIpAddressTable(family, &table) == NO_ERROR) {
+            if (GetUnicastIpAddressTable(static_cast<ADDRESS_FAMILY>(family), &table) == NO_ERROR) {
                 for (ULONG i = 0; i < table->NumEntries; ++i) {
                     if (table->Table[i].InterfaceLuid.Value == luid.Value) {
                         DeleteUnicastIpAddressEntry(&table->Table[i]);
