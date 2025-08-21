@@ -8,4 +8,8 @@
 
 namespace  asio = boost::asio;
 
-using IPPacketChannel = asio::experimental::channel<void(boost::system::error_code, std::vector<uint8_t>)>;
+// A smart pointer to a raw packet data buffer.
+using PacketBufferPtr = std::unique_ptr<std::vector<uint8_t>>;
+
+// The channel now transports the smart pointer, not the vector itself.
+using IPPacketChannel = asio::experimental::channel<void(boost::system::error_code, PacketBufferPtr)>;

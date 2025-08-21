@@ -191,28 +191,38 @@ namespace stack::device {
     asio::awaitable<void> Win32Tun::run_reader(IPPacketChannel &incoming_channel) {
         try {
             while (true) {
-                std::vector<uint8_t> buffer(2048);
+                // Wait for a packet to be available from the Wintun driver.
                 if (
                     auto [ec] = co_await m_read_handle.async_wait(
                         asio::as_tuple(asio::use_awaitable)
                     );
                     ec
                 ) {
-                    // Handle wait errors (e.g., handle was closed)
+                    // Handle wait errors (e.g., handle was closed).
                     throw boost::system::system_error(ec);
                 }
 
+                // Get a pointer to the packet in Wintun's internal buffer.
                 DWORD packet_size_dw;
-                const BYTE *packet = m_WintunReceivePacket(m_session, &packet_size_dw);
-                if (!packet) {
-                    co_return;
+                const BYTE* packet_data = m_WintunReceivePacket(m_session, &packet_size_dw);
+
+                if (!packet_data) {
+                    // No packet available, continue waiting.
+                    continue;
                 }
 
-                size_t bytes_to_copy = std::min(buffer.size(), static_cast<size_t>(packet_size_dw));
-                buffer.resize(bytes_to_copy);
-                std::memcpy(buffer.data(), packet, bytes_to_copy);
-                m_WintunReleaseReceivePacket(m_session, packet);
-                co_await incoming_channel.async_send({}, std::move(buffer));
+                // --- THE SINGLE-COPY OPERATION ---
+                // 1. Create a vector by copying the data directly from the Wintun buffer.
+                //    This is the one and only copy.
+                auto buffer = std::vector(packet_data, packet_data + packet_size_dw);
+
+                // 2. Immediately release Wintun's internal buffer.
+                m_WintunReleaseReceivePacket(m_session, packet_data);
+
+                // 3. Create a unique_ptr to the new vector and send it down the channel.
+                auto buffer_ptr = std::make_unique<std::vector<uint8_t>>(std::move(buffer));
+
+                co_await incoming_channel.async_send({}, std::move(buffer_ptr));
             }
         } catch (const std::exception &e) {
             if (errno != EBADF) {
@@ -234,13 +244,13 @@ namespace stack::device {
                     co_return;
                 }
 
-                BYTE *send_packet = m_WintunAllocateSendPacket(m_session, static_cast<DWORD>(buffer.size()));
+                BYTE *send_packet = m_WintunAllocateSendPacket(m_session, static_cast<DWORD>(buffer->size()));
                 if (!send_packet) {
                     fmt::println("Failed to allocate send packet from Wintun ring.");
                     throw boost::system::system_error(asio::error::no_buffer_space);
                 }
 
-                std::memcpy(send_packet, buffer.data(), buffer.size());
+                std::memcpy(send_packet, buffer->data(), buffer->size());
                 m_WintunSendPacket(m_session, send_packet);
             }
         } catch (const std::exception &e) {
