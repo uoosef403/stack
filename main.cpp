@@ -2,6 +2,7 @@
 
 #include "device/tun.h"
 #include "core/dispatcher.hpp"
+#include "core/handlers/icmp_handler.hpp"
 
 int main() {
 #ifdef DEBUG
@@ -14,6 +15,8 @@ int main() {
         constexpr auto TUN_IP4_MASK = "255.255.255.0";
         constexpr auto TUN_IP6 = "fd69::69";
         constexpr auto TUN_IP6_PREFIX_MASK = 64;
+
+        constexpr auto ICMP_HANDLER_NUMBER = 1;
 
         asio::io_context io_context;
 
@@ -30,6 +33,15 @@ int main() {
         IPPacketChannel outgoing_channel(io_context, 128);
 
         Dispatcher dispatcher(io_context.get_executor(), incoming_channel, outgoing_channel);
+        auto icmp_handler = std::make_unique<IcmpHandler>(
+            io_context.get_executor(),
+            outgoing_channel,
+            TUN_IP4,
+            TUN_IP6
+        );
+
+        // Register it to handle (ICMP).
+        dispatcher.register_handler(ICMP_HANDLER_NUMBER, std::move(icmp_handler));
 
         asio::co_spawn(io_context, tun_device->run_reader(incoming_channel), asio::detached);
         asio::co_spawn(io_context, tun_device->run_writer(outgoing_channel), asio::detached);

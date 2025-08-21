@@ -27,6 +27,7 @@ public:
 
     // public func
     asio::awaitable<void> run();
+    void register_handler(uint8_t protocol_number, std::unique_ptr<IProtocolHandler> handler);
 
 private:
     asio::any_io_executor executor_;

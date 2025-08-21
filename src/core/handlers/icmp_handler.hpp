@@ -6,8 +6,12 @@
 
 class IcmpHandler final : public IProtocolHandler {
 public:
-    IcmpHandler(asio::any_io_executor executor, IPPacketChannel &outgoing_channel,
-                asio::ip::address_v4 tun_address);
+    IcmpHandler(
+        asio::any_io_executor executor,
+        IPPacketChannel &outgoing_channel,
+        const std::string& tun_address_v4,
+        const std::string& tun_address_v6
+    );
 
     void handle_ipv4(Tins::IP &packet) override;
 
@@ -18,5 +22,6 @@ private:
 
     asio::any_io_executor executor_;
     IPPacketChannel &outgoing_channel_;
-    asio::ip::address_v4 tun_address_;
+    asio::ip::address_v4 tun_address_v4_;
+    asio::ip::address_v6 tun_address_v6_;
 };

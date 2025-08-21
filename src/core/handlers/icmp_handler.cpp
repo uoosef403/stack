@@ -5,16 +5,17 @@
 
 IcmpHandler::IcmpHandler(asio::any_io_executor executor,
                          IPPacketChannel &outgoing_channel,
-                         asio::ip::address_v4 tun_address)
-    : executor_(std::move(executor)), outgoing_channel_(outgoing_channel),
-      tun_address_(std::move(tun_address)) {
+                         const std::string& tun_address_v4,
+                         const std::string& tun_address_v6)
+    : executor_(std::move(executor)), outgoing_channel_(outgoing_channel) {
+    tun_address_v4_ = asio::ip::make_address_v4(tun_address_v4);
+    tun_address_v6_ = asio::ip::make_address_v6(tun_address_v6);
 }
 
 void IcmpHandler::handle_ipv4(Tins::IP &packet) {
-    // First, check if the packet is actually addressed to our TUN interface.
-    if (packet.dst_addr() != tun_address_.to_string()) {
-        return;
-    }
+    // We dont actually proxy icmp echo packets and we dont
+    // care about them so we simply generate a fake response
+    // for testing purposes
 
     // Use libtins to find the ICMP layer within the IP packet.
     if (const auto *icmp = packet.find_pdu<Tins::ICMP>()) {
