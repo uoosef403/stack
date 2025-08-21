@@ -35,7 +35,7 @@ void IcmpHandler::handle_ipv6(Tins::IPv6 &packet) {
     (void) packet; // Suppress unused parameter warning.
 }
 
-asio::awaitable<void> IcmpHandler::send_echo_reply(const Tins::IP &request) {
+asio::awaitable<void> IcmpHandler::send_echo_reply(const Tins::IP &request) const {
     try {
         const auto *icmp_request = request.find_pdu<Tins::ICMP>();
         if (!icmp_request) {

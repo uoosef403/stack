@@ -14,7 +14,7 @@ public:
     void handle_ipv6(Tins::IPv6 &packet) override;
 
 private:
-    asio::awaitable<void> send_echo_reply(const Tins::IP &request);
+    asio::awaitable<void> send_echo_reply(const Tins::IP &request) const;
 
     asio::any_io_executor executor_;
     IPPacketChannel &outgoing_channel_;

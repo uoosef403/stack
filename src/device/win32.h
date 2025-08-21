@@ -33,10 +33,18 @@ namespace stack::device {
         /**
          * @brief Factory method to create and open a new TUN device on Windows.
          */
-        static std::unique_ptr<Tun> create(asio::io_context &io_context, const std::string &name);
+        static std::unique_ptr<Tun> create(asio::io_context &io_context, const std::string &name,
+                                           const std::string &tun_ip4, const std::string &tun_ip4_mask, const
+                                           std::string &tun_ip6, const uint8_t tun_ip6_prefix_mask);
 
     private:
-        explicit Win32Tun(asio::io_context &io_context);
+        explicit Win32Tun(
+            asio::io_context &io_context,
+            const std::string &tun_ip4,
+            const std::string &tun_ip4_mask,
+            const std::string &tun_ip6,
+            const uint8_t tun_ip6_prefix_mask
+        );
 
         bool open(const std::string &name);
 
@@ -69,6 +77,10 @@ namespace stack::device {
         WINTUN_SEND_PACKET_FUNC m_WintunSendPacket = nullptr;
         WINTUN_DELETE_ADAPTER_FUNC m_WintunDeleteAdapter = nullptr;
         GUID m_guid{};
+        const std::string &m_tun_ip4;
+        const std::string &m_tun_ip4_mask;
+        const std::string &m_tun_ip6;
+        const uint8_t m_tun_ip6_prefix_mask;
     };
 } // namespace stack::device
 #endif // _WIN32

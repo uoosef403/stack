@@ -16,7 +16,15 @@ namespace asio = boost::asio;
 
 namespace stack::device {
     // --- Constructor / Destructor ---
-    Win32Tun::Win32Tun(asio::io_context &io_context) : m_read_handle(io_context) {
+    Win32Tun::Win32Tun(
+        asio::io_context &io_context,
+        const std::string &tun_ip4,
+        const std::string &tun_ip4_mask,
+        const std::string &tun_ip6,
+        const uint8_t tun_ip6_prefix_mask
+    ) : m_read_handle(io_context), m_tun_ip4(tun_ip4),
+    m_tun_ip4_mask(tun_ip4_mask), m_tun_ip6(tun_ip6),
+    m_tun_ip6_prefix_mask(tun_ip6_prefix_mask) {
     }
 
     Win32Tun::~Win32Tun() {
@@ -43,8 +51,23 @@ namespace stack::device {
     }
 
     // --- Factory Method ---
-    std::unique_ptr<Tun> Win32Tun::create(asio::io_context &io_context, const std::string &name) {
-        auto tun = std::unique_ptr<Win32Tun>(new Win32Tun(io_context));
+    std::unique_ptr<Tun> Win32Tun::create(
+        asio::io_context &io_context,
+        const std::string &name,
+        const std::string &tun_ip4,
+        const std::string &tun_ip4_mask,
+        const std::string &tun_ip6,
+        const uint8_t tun_ip6_prefix_mask
+    ) {
+        auto tun = std::unique_ptr<Win32Tun>(
+            new Win32Tun(
+                io_context,
+                tun_ip4,
+                tun_ip4_mask,
+                tun_ip6,
+                tun_ip6_prefix_mask
+            )
+        );
         if (!tun->open(name)) {
             return nullptr;
         }
@@ -154,8 +177,8 @@ namespace stack::device {
             return false;
         }
 
-        if (!configure("192.168.69.69", "255.255.255.0",
-                       "fd69::69", 64)) {
+        if (!configure(m_tun_ip4, m_tun_ip4_mask,
+                       m_tun_ip6, m_tun_ip6_prefix_mask)) {
             fmt::println(stderr, "Failed to assign IPs to Wintun adapter, do this yourself");
         }
 
