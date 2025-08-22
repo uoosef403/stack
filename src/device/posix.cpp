@@ -8,6 +8,7 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <sys/ioctl.h>
+#include <linux/rtnetlink.h>
 #include <unistd.h>
 
 namespace stack::device
@@ -37,13 +38,22 @@ namespace stack::device
         }
     };
 
-    PosixTun::PosixTun(asio::io_context& io_context) : asio_descriptor_(io_context)
+    PosixTun::PosixTun(
+        asio::io_context& io_context,
+        const std::string& tun_ip4,
+        const std::string& tun_ip4_mask,
+        const std::string& tun_ip6,
+        const uint8_t tun_ip6_prefix_mask
+    ) : asio_descriptor_(io_context), m_tun_ip4(tun_ip4),
+        m_tun_ip4_mask(tun_ip4_mask), m_tun_ip6(tun_ip6),
+        m_tun_ip6_prefix_mask(tun_ip6_prefix_mask)
     {
     }
 
     PosixTun::~PosixTun()
     {
-        if (fd_ >= 0) {
+        if (fd_ >= 0)
+        {
             fmt::println(stderr, "Closing TUN device: {}\n", name_);
             if (asio_descriptor_.is_open())
             {
@@ -54,16 +64,20 @@ namespace stack::device
             {
                 close(fd_);
                 // Attempt to bring the interface down, but don't throw from destructor.
-                try {
+                try
+                {
                     IoctlSocket sock;
                     ifreq ifr{};
                     std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
 
-                    if (ioctl(sock.fd, SIOCGIFFLAGS, &ifr) == 0) {
+                    if (ioctl(sock.fd, SIOCGIFFLAGS, &ifr) == 0)
+                    {
                         ifr.ifr_flags &= ~IFF_UP;
                         ioctl(sock.fd, SIOCSIFFLAGS, &ifr);
                     }
-                } catch (const std::exception &e) {
+                }
+                catch (const std::exception& e)
+                {
                     fmt::println(stderr, "Error during TUN device cleanup: {}\n", e.what());
                 }
             }
@@ -89,7 +103,8 @@ namespace stack::device
                 }
 
                 buffer.resize(len);
-                co_await incoming_channel.async_send({}, std::move(buffer));
+                auto buffer_ptr = std::make_unique<std::vector<uint8_t>>(std::move(buffer));
+                co_await incoming_channel.async_send({}, std::move(buffer_ptr));
             }
         }
         catch (const std::exception& e)
@@ -118,7 +133,7 @@ namespace stack::device
                     co_return;
                 }
 
-                co_await asio::async_write(asio_descriptor_, asio::buffer(buffer),
+                co_await asio::async_write(asio_descriptor_, asio::buffer(*buffer),
                                            asio::use_awaitable);
             }
         }
@@ -171,82 +186,146 @@ namespace stack::device
 
         fmt::println(stderr, "Created TUN device: {}\n", name_);
 
-        if (!set_ip("192.168.69.69") || !set_netmask("255.255.255.0") || !set_if_up())
+        if (!configure(m_tun_ip4, m_tun_ip4_mask,
+                       m_tun_ip6, m_tun_ip6_prefix_mask))
         {
-            fmt::println(stderr, "unable assign ip or bring the interface up!, do it yourself");
+            fmt::println(stderr, "Failed to assign IPs to Wintun adapter, do this yourself");
             return false;
         }
 
         return assign(fd_); // Call assign internally
     }
 
-    bool PosixTun::set_ip(const std::string& ip_addr) const {
+    bool PosixTun::configure(const std::string& ip4,
+                             const std::string& netmask,
+                             const std::string& ip6,
+                             uint8_t prefix_len) const
+    {
         IoctlSocket sock;
         ifreq ifr{};
         std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
 
-        auto *addr = reinterpret_cast<sockaddr_in *>(&ifr.ifr_addr);
-        addr->sin_family = AF_INET;
-        if (inet_pton(AF_INET, ip_addr.c_str(), &addr->sin_addr) != 1) {
-            fmt::print(stderr, "Invalid IP address format for: {}", ip_addr);
-            return false;
+        // --- IPv4 address ---
+        if (!ip4.empty())
+        {
+            auto* addr = reinterpret_cast<sockaddr_in*>(&ifr.ifr_addr);
+            addr->sin_family = AF_INET;
+            if (inet_pton(AF_INET, ip4.c_str(), &addr->sin_addr) != 1)
+            {
+                fmt::println(stderr, "Invalid IPv4 address: {}", ip4);
+                return false;
+            }
+            if (ioctl(sock.fd, SIOCSIFADDR, &ifr) < 0)
+            {
+                fmt::println(stderr, "Failed to set IPv4 address");
+                return false;
+            }
         }
 
-        if (ioctl(sock.fd, SIOCSIFADDR, &ifr) < 0) {
-            fmt::println(stderr, "Failed to set IP address");
-            return false;
+        // --- IPv4 netmask ---
+        if (!netmask.empty())
+        {
+            auto* mask = reinterpret_cast<sockaddr_in*>(&ifr.ifr_netmask);
+            mask->sin_family = AF_INET;
+            if (inet_pton(AF_INET, netmask.c_str(), &mask->sin_addr) != 1)
+            {
+                fmt::println(stderr, "Invalid netmask: {}", netmask);
+                return false;
+            }
+            if (ioctl(sock.fd, SIOCSIFNETMASK, &ifr) < 0)
+            {
+                fmt::println(stderr, "Failed to set netmask");
+                return false;
+            }
         }
 
-        return true;
-    }
-
-    bool PosixTun::set_netmask(const std::string& netmask) const {
-        IoctlSocket sock;
-        ifreq ifr{};
-        std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
-
-        auto *addr = reinterpret_cast<sockaddr_in *>(&ifr.ifr_addr);
-        addr->sin_family = AF_INET;
-        if (inet_pton(AF_INET, netmask.c_str(), &addr->sin_addr) != 1) {
-            fmt::println(stderr, "Invalid netmask format for: {}", netmask);
-            return false;
-        }
-
-        // NOTE: SIOCSIFNETMASK also uses the ifr_addr field, not a separate
-        // ifr_netmask.
-        if (ioctl(sock.fd, SIOCSIFNETMASK, &ifr) < 0) {
-            fmt::println(stderr, "Failed to set netmask");
-            return false;
-        }
-
-        return true;
-    }
-
-    bool PosixTun::set_if_up() const {
-        IoctlSocket sock;
-        ifreq ifr{};
-        std::strncpy(ifr.ifr_name, name_.c_str(), IFNAMSIZ - 1);
-
-        if (ioctl(sock.fd, SIOCGIFFLAGS, &ifr) < 0) {
+        // --- Bring interface up ---
+        if (ioctl(sock.fd, SIOCGIFFLAGS, &ifr) < 0)
+        {
             fmt::println(stderr, "Failed to get interface flags");
             return false;
         }
-
         ifr.ifr_flags |= (IFF_UP | IFF_RUNNING);
-
-        if (ioctl(sock.fd, SIOCSIFFLAGS, &ifr) < 0) {
+        if (ioctl(sock.fd, SIOCSIFFLAGS, &ifr) < 0)
+        {
             fmt::println(stderr, "Failed to bring interface up");
             return false;
         }
 
+        // --- IPv6 configuration via netlink ---
+        if (!ip6.empty())
+        {
+            int nl = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+            if (nl < 0)
+            {
+                fmt::println(stderr, "Failed to open netlink socket");
+                return false;
+            }
+
+            struct
+            {
+                nlmsghdr nlh;
+                ifaddrmsg ifa;
+                char buf[256];
+            } req{};
+
+            req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(ifaddrmsg));
+            req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_CREATE | NLM_F_EXCL;
+            req.nlh.nlmsg_type = RTM_NEWADDR;
+
+            req.ifa.ifa_family = AF_INET6;
+            req.ifa.ifa_prefixlen = prefix_len;
+            req.ifa.ifa_index = if_nametoindex(name_.c_str());
+            req.ifa.ifa_scope = 0;
+
+            // Add IFA_LOCAL (the IPv6 address itself)
+            in6_addr in6{};
+            if (inet_pton(AF_INET6, ip6.c_str(), &in6) != 1)
+            {
+                fmt::println(stderr, "Invalid IPv6 address: {}", ip6);
+                close(nl);
+                return false;
+            }
+            rtattr* rta = reinterpret_cast<struct rtattr*>(
+                reinterpret_cast<char*>(&req) + NLMSG_ALIGN(req.nlh.nlmsg_len)
+            );
+            int rta_len = RTA_LENGTH(sizeof(in6));
+            rta->rta_type = IFA_LOCAL;
+            rta->rta_len = rta_len;
+            memcpy(RTA_DATA(rta), &in6, sizeof(in6));
+            req.nlh.nlmsg_len = NLMSG_ALIGN(req.nlh.nlmsg_len) + RTA_ALIGN(rta_len);
+
+            if (send(nl, &req, req.nlh.nlmsg_len, 0) < 0)
+            {
+                fmt::println(stderr, "Failed to send IPv6 address via netlink: {}", strerror(errno));
+                close(nl);
+                return false;
+            }
+            close(nl);
+        }
+
         return true;
     }
-    
-    std::unique_ptr<Tun> PosixTun::create(asio::io_context& io_context,
-                                          const std::string& name)
+
+    std::unique_ptr<Tun> PosixTun::create(
+        asio::io_context& io_context,
+        const std::string& name,
+        const std::string& tun_ip4,
+        const std::string& tun_ip4_mask,
+        const std::string& tun_ip6,
+        const uint8_t tun_ip6_prefix_mask
+    )
     {
         // This is now much cleaner.
-        auto tun = std::unique_ptr<PosixTun>(new PosixTun(io_context));
+        auto tun = std::unique_ptr<PosixTun>(
+            new PosixTun(
+                io_context,
+                tun_ip4,
+                tun_ip4_mask,
+                tun_ip6,
+                tun_ip6_prefix_mask
+            )
+        );
 
         if (!tun->open(name))
         {
@@ -257,9 +336,24 @@ namespace stack::device
         return tun;
     }
 
-    std::unique_ptr<Tun> PosixTun::from_fd(asio::io_context& io_context, int fd)
+    std::unique_ptr<Tun> PosixTun::from_fd(
+        asio::io_context& io_context,
+        int fd,
+        const std::string& tun_ip4,
+        const std::string& tun_ip4_mask,
+        const std::string& tun_ip6,
+        const uint8_t tun_ip6_prefix_mask
+    )
     {
-        auto tun = std::unique_ptr<PosixTun>(new PosixTun(io_context));
+        auto tun = std::unique_ptr<PosixTun>(
+            new PosixTun(
+                io_context,
+                tun_ip4,
+                tun_ip4_mask,
+                tun_ip6,
+                tun_ip6_prefix_mask
+            )
+        );
         if (!tun->assign(fd))
         {
             fmt::println(stderr, "Failed to assign existing file descriptor {}.", fd);
