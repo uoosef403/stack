@@ -25,26 +25,55 @@ namespace stack::device
         /**
          * @brief Factory method to create a new TUN device.
          */
-        static std::unique_ptr<Tun> create(asio::io_context& io_context,
-                                           const std::string& name);
+        static std::unique_ptr<Tun> create(
+            asio::io_context& io_context,
+            const std::string& name,
+            const std::string& tun_ip4,
+            const std::string& tun_ip4_mask,
+            const std::string& tun_ip6,
+            uint8_t tun_ip6_prefix_mask
+        );
 
         /**
          * @brief Factory method to wrap an existing TUN file descriptor.
          */
-        static std::unique_ptr<Tun> from_fd(asio::io_context& io_context, int fd);
+        static std::unique_ptr<Tun> from_fd(
+            asio::io_context& io_context,
+            int fd,
+            const std::string& tun_ip4,
+            const std::string& tun_ip4_mask,
+            const std::string& tun_ip6,
+            uint8_t tun_ip6_prefix_mask
+        );
 
     private:
-        explicit PosixTun(asio::io_context& io_context);
+        explicit PosixTun(
+            asio::io_context& io_context,
+            const std::string& tun_ip4,
+            const std::string& tun_ip4_mask,
+            const std::string& tun_ip6,
+            uint8_t tun_ip6_prefix_mask
+        );
+
         bool open(const std::string& name);
-        bool set_ip(const std::string& ip_addr) const;
-        bool set_netmask(const std::string& netmask) const;
-        bool set_if_up() const;
+
+        bool configure(
+            const std::string& ip4,
+            const std::string& netmask,
+            const std::string& ip6,
+            uint8_t prefix_len
+        ) const;
+
         bool assign(int fd);
 
         int fd_ = -1;
         std::string name_;
         bool from_fd_ = true;
         asio::posix::stream_descriptor asio_descriptor_;
+        const std::string& m_tun_ip4;
+        const std::string& m_tun_ip4_mask;
+        const std::string& m_tun_ip6;
+        const uint8_t m_tun_ip6_prefix_mask;
     };
 } // namespace stack::device
 
