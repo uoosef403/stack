@@ -12,10 +12,33 @@ namespace stack::tcp {
 
         // Constructor for easy initialization
         four_tuple(asio::ip::address s_ip, asio::ip::address d_ip, uint16_t s_port, uint16_t d_port)
-            : src_ip(std::move(s_ip)), dst_ip(std::move(d_ip)), src_port(s_port), dst_port(d_port) {}
+            : src_ip(std::move(s_ip)), dst_ip(std::move(d_ip)), src_port(s_port), dst_port(d_port) {
+        }
+
+        static asio::ip::address to_asio(const Tins::IPv4Address &a) {
+            return asio::ip::make_address_v4(a.to_string());
+        }
+
+        static asio::ip::address to_asio(const Tins::IPv6Address &a) {
+            return asio::ip::make_address_v6(a.to_string());
+        }
+
+        template<typename T>
+        explicit four_tuple(const T &packet)
+            requires (std::is_same_v<T, Tins::IP> || std::is_same_v<T, Tins::IPv6>) {
+            const auto *tcp = packet.template find_pdu<Tins::TCP>();
+            if (!tcp) {
+                throw std::runtime_error("four_tuple created from non-TCP packet");
+            }
+
+            src_ip = to_asio(packet.src_addr());
+            dst_ip = to_asio(packet.dst_addr());
+            src_port = tcp->sport();
+            dst_port = tcp->dport();
+        }
 
         // Comparison operator for use in maps
-        bool operator<(const four_tuple& other) const {
+        bool operator<(const four_tuple &other) const {
             return std::tie(src_ip, dst_ip, src_port, dst_port) <
                    std::tie(other.src_ip, other.dst_ip, other.src_port, other.dst_port);
         }
@@ -24,7 +47,8 @@ namespace stack::tcp {
     class Pcb {
     public:
         explicit Pcb(four_tuple tuple)
-            : id_(std::move(tuple)), state_(TcpState::CLOSED) {}
+            : id_(std::move(tuple)), state_(TcpState::CLOSED) {
+        }
 
         four_tuple id_;
         TcpState state_;
