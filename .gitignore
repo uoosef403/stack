@@ -5,3 +5,4 @@ build
 .vcpkg
 .cache
 .venv
+compile_commands.json

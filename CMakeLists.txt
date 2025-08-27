@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.21)
 
 # --- CMake Policies ---
 cmake_policy(SET CMP0135 NEW)
@@ -7,8 +7,16 @@ cmake_policy(SET CMP0135 NEW)
 # --- Project Configuration ---
 project(stack CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile commands for clangd" FORCE)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+set(CMAKE_HAVE_THREADS_LIBRARY 1)
+set(CMAKE_USE_WIN32_THREADS_INIT 0)
+set(CMAKE_USE_PTHREADS_INIT 1)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 # --- Dependencies ---
 # This section assumes Boost and {fmt} are provided by a package manager
@@ -75,6 +83,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Boost::asio
         fmt::fmt
         tins
+)
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_BINARY_DIR}/compile_commands.json
+        ${CMAKE_SOURCE_DIR}/compile_commands.json
 )
 
 # Windows-specific settings
