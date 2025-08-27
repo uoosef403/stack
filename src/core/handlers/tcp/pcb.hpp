@@ -23,6 +23,11 @@ namespace stack::tcp {
             return asio::ip::make_address_v6(a.to_string());
         }
 
+        // Returns true if this tuple uses IPv6 addresses
+        bool is_ipv6() const {
+            return src_ip.is_v6() && dst_ip.is_v6();
+        }
+
         template<typename T>
         explicit four_tuple(const T &packet)
             requires (std::is_same_v<T, Tins::IP> || std::is_same_v<T, Tins::IPv6>) {
@@ -47,11 +52,11 @@ namespace stack::tcp {
     class Pcb {
     public:
         explicit Pcb(four_tuple tuple)
-            : id_(std::move(tuple)), state_(TcpState::CLOSED) {
+            : id(std::move(tuple)), state(TcpState::CLOSED) {
         }
 
-        four_tuple id_;
-        TcpState state_;
+        four_tuple id;
+        TcpState state;
 
         // Sequence and Acknowledgment numbers.
         // We need to track what we've sent and what we expect to receive.
@@ -59,11 +64,11 @@ namespace stack::tcp {
             uint32_t next = 0; // SND.NXT: Next sequence number to send.
             uint32_t unacknowledged = 0; // SND.UNA: Oldest unacknowledged sequence number.
             uint32_t window = 0; // SND.WND: The receive window of our peer.
-        } send_vars_;
+        } send_vars;
 
         struct {
             uint32_t next = 0; // RCV.NXT: Next sequence number expected.
             uint32_t window = 65535; // RCV.WND: Our receive window size.
-        } recv_vars_;
+        } recv_vars;
     };
 }
