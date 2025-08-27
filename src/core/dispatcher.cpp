@@ -44,11 +44,16 @@ asio::awaitable<void> Dispatcher::run()
                     if (auto it = handlers_.find(ip_packet_ptr->protocol()); it != handlers_.end()) {
                         // 3. Move the unique_ptr to the handler, transferring ownership.
                         it->second->handle_ipv4(std::move(ip_packet_ptr));
+                    } else {
+                        fmt::println(
+                            stderr,
+                            "Dispatcher: No handler for protocol number {}",
+                            ip_packet_ptr->protocol()
+                        );
                     }
                 } catch (const Tins::malformed_packet& ex) {
                     fmt::print(stderr, "   ERROR: libtins rejected IPv4 packet: {}\n", ex.what());
                 }
-
             } else if (ip_version == 6) {
                 try {
                     // Do the same for IPv6
@@ -59,6 +64,12 @@ asio::awaitable<void> Dispatcher::run()
 
                     if (auto it = handlers_.find(ipv6_packet_ptr->next_header()); it != handlers_.end()) {
                         it->second->handle_ipv6(std::move(ipv6_packet_ptr));
+                    } else {
+                        fmt::println(
+                            stderr,
+                            "Dispatcher: No handler for protocol number {}",
+                            ipv6_packet_ptr->next_header()
+                        );
                     }
                 } catch (const Tins::malformed_packet& ex) {
                     fmt::print(stderr, "   ERROR: libtins rejected IPv6 packet: {}\n", ex.what());

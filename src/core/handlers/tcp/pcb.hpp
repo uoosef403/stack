@@ -63,12 +63,12 @@ namespace stack::tcp {
         struct {
             uint32_t next = 0; // SND.NXT: Next sequence number to send.
             uint32_t unacknowledged = 0; // SND.UNA: Oldest unacknowledged sequence number.
-            uint32_t window = 0; // SND.WND: The receive window of our peer.
+            uint16_t window = 0; // SND.WND: The receive window of our peer.
         } send_vars;
 
         struct {
             uint32_t next = 0; // RCV.NXT: Next sequence number expected.
-            uint32_t window = 65535; // RCV.WND: Our receive window size.
+            uint16_t window = 65535; // RCV.WND: Our receive window size.
         } recv_vars;
     };
 }

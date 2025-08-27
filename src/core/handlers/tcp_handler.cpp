@@ -82,7 +82,7 @@ requires (std::is_same_v<IP_TYPE, Tins::IP> || std::is_same_v<IP_TYPE, Tins::IPv
                      data.size(), tuple.src_ip.to_string(), tuple.src_port, data_str);
 
         // Update acknowledgment number and send an ACK for the received data.
-        pcb.recv_vars.next += data.size();
+        pcb.recv_vars.next += static_cast<uint32_t>(data.size());
         asio::co_spawn(executor_, send_tcp_packet(pcb, Tins::TCP::ACK), asio::detached);
     }
 
@@ -134,7 +134,7 @@ requires (std::is_same_v<IP_TYPE, Tins::IP> || std::is_same_v<IP_TYPE, Tins::IPv
     );
 }
 
-asio::awaitable<void> TcpHandler::send_tcp_packet(const stack::tcp::Pcb &pcb, uint32_t flags,
+asio::awaitable<void> TcpHandler::send_tcp_packet(const stack::tcp::Pcb &pcb, unsigned short flags,
                                                   const Tins::PDU *payload) const {
     try {
         Tins::TCP tcp(pcb.id.src_port, pcb.id.dst_port);
