@@ -35,13 +35,23 @@ int main() {
         IPPacketChannel outgoing_channel(io_context, 128);
 
         Dispatcher dispatcher(io_context.get_executor(), incoming_channel, outgoing_channel);
-        auto icmp_handler = std::make_unique<IcmpHandler>(
+        auto icmp_handler = std::make_unique<stack::handlers::IcmpHandler>(
             io_context.get_executor(),
             outgoing_channel,
             TUN_IP4,
             TUN_IP6
         );
-        auto tcp_handler = std::make_unique<TcpHandler>(io_context.get_executor(), outgoing_channel);
+
+        // Use the type alias to declare your factory lambda
+        stack::handlers::ProxyClientFactory socks5_factory = [&]() -> std::unique_ptr<stack::proxy::clients::IProxyClient> {
+            return nullptr;
+        };
+
+        auto tcp_handler = std::make_unique<stack::handlers::TcpHandler>(
+            io_context.get_executor(),
+            outgoing_channel,
+            socks5_factory // Pass the factory
+        );
 
         // Register it to handle (ICMP).
         dispatcher.register_handler(ICMP_HANDLER_NUMBER, std::move(icmp_handler));

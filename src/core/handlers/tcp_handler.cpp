@@ -2,6 +2,8 @@
 #include <fmt/core.h>
 #include <random> // For generating ISN
 
+namespace stack::proxy { class TcpFlow; }
+
 // Anonymous namespace for internal helpers
 namespace {
     // Helper to generate a random Initial Sequence Number.
@@ -16,101 +18,139 @@ namespace {
 namespace stack::handlers {
     // --- Constructor ---
     TcpHandler::TcpHandler(asio::any_io_executor executor,
-                           IPPacketChannel &outgoing_channel)
-        : executor_(std::move(executor)), outgoing_channel_(outgoing_channel) {
+                           IPPacketChannel &outgoing_channel,
+                           ProxyClientFactory factory)
+        : executor_(std::move(executor)), outgoing_channel_(outgoing_channel),
+          proxy_client_factory_(std::move(factory)) {
     }
+
+    TcpHandler::~TcpHandler() = default;
 
     // --- Public Dispatcher Methods ---
     void TcpHandler::handle_ipv4(std::unique_ptr<Tins::IP> packet) {
-        process_tcp_packet<Tins::IP>(std::move(packet));
+        // A coroutine must be spawned to run.
+        asio::co_spawn(executor_,
+                       process_tcp_packet<Tins::IP>(std::move(packet)),
+                       asio::detached);
     }
 
     void TcpHandler::handle_ipv6(std::unique_ptr<Tins::IPv6> packet) {
-        process_tcp_packet<Tins::IPv6>(std::move(packet));
+        // Also spawn the IPv6 version.
+        asio::co_spawn(executor_,
+                       process_tcp_packet<Tins::IPv6>(std::move(packet)),
+                       asio::detached);
     }
 
     // --- Private Core Logic ---
     template<typename IP_TYPE>
-    void TcpHandler::process_tcp_packet(std::unique_ptr<IP_TYPE> packet)
+    asio::awaitable<void> TcpHandler::process_tcp_packet(std::unique_ptr<IP_TYPE> packet)
         requires(std::is_same_v<IP_TYPE, Tins::IP> ||
                  std::is_same_v<IP_TYPE, Tins::IPv6>) {
         const auto *tcp = packet->template find_pdu<Tins::TCP>();
-        if (!tcp) {
-            return; // Not a TCP packet
-        }
+        if (!tcp) co_return;
 
         tcp::four_tuple tuple(*packet);
-        const auto it = connections_.find(tuple);
+        const auto pcb_it = connections_.find(tuple);
 
         // --- Handle new connection attempts ---
-        if (it == connections_.end()) {
+        if (pcb_it == connections_.end()) {
             if (tcp->flags() == Tins::TCP::SYN) {
                 handle_syn(*packet);
             }
-            // Silently drop other packets for non-existent connections.
-            return;
+            co_return;
         }
 
         // --- Handle existing connections ---
-        tcp::Pcb &pcb = it->second;
+        tcp::Pcb &pcb = pcb_it->second;
 
-        // State: SYN_RECEIVED (completing the handshake)
-        if (pcb.state == TcpState::SYN_RECEIVED && tcp->flags() == Tins::TCP::ACK) {
-            if (tcp->ack_seq() == pcb.send_vars.next) {
-                fmt::println("TCP: Connection ESTABLISHED for {}:{}",
-                             tuple.src_ip.to_string(), tuple.src_port);
-                pcb.state = TcpState::ESTABLISHED;
-                pcb.send_vars.unacknowledged = tcp->ack_seq();
-            }
-            return; // Handshake ACK has no payload, so we can return.
-        }
+        // Optional but recommended: Basic sequence number validation
+        // Ignores packets that are not the next expected sequence, except for pure ACKs.
+        bool has_payload = tcp->template find_pdu<Tins::RawPDU>() != nullptr &&
+                           !tcp->template find_pdu<Tins::RawPDU>()->payload().empty();
 
-        // State: LAST_ACK (final ACK from client after we sent FIN)
-        if (pcb.state == TcpState::LAST_ACK && tcp->flags() == Tins::TCP::ACK) {
-            fmt::println("TCP: Connection closed for {}:{}",
+        if ((has_payload || (tcp->flags() & Tins::TCP::FIN)) && tcp->seq() != pcb.recv_vars.next) {
+            fmt::println("TCP: Ignoring out-of-order packet for {}:{}",
                          tuple.src_ip.to_string(), tuple.src_port);
-            connections_.erase(it); // Connection is fully closed.
-            return;
+            // In a real stack, you might send a duplicate ACK here.
+            co_return;
         }
 
-        // Ignore packets if not yet established (and not part of above states).
-        if (pcb.state != TcpState::ESTABLISHED &&
-            pcb.state != TcpState::CLOSE_WAIT) {
-            return;
-        }
+        // Use a state machine to handle the packet based on the connection's current state.
+        switch (pcb.state) {
+            case TcpState::SYN_RECEIVED: {
+                if (tcp->flags() == Tins::TCP::ACK && tcp->ack_seq() == pcb.send_vars.next) {
+                    fmt::println("TCP: Connection ESTABLISHED for {}:{}",
+                                 tuple.src_ip.to_string(), tuple.src_port);
+                    pcb.state = TcpState::ESTABLISHED;
+                    pcb.send_vars.unacknowledged = tcp->ack_seq();
 
-        // --- Data Transfer (payload handling) ---
-        const Tins::RawPDU *payload = tcp->template find_pdu<Tins::RawPDU>();
-        if (payload && !payload->payload().empty()) {
-            const auto &data = payload->payload();
-            std::string data_str(data.begin(), data.end());
+                    // The connection is established, so we create and launch the high-level flow.
+                    if (!flows_.contains(tuple)) {
+                        auto on_error_callback = [this](const tcp::four_tuple &id) {
+                            this->terminate_connection(id);
+                        };
 
-            fmt::println("TCP: Received {} bytes from {}:{}: \"{}\"", data.size(),
-                         tuple.src_ip.to_string(), tuple.src_port, data_str);
+                        auto client = proxy_client_factory_();
+                        auto flow = std::make_unique<proxy::TcpFlow>(
+                            std::move(client), pcb, outgoing_channel_, on_error_callback
+                        );
 
-            // Update acknowledgment number and send an ACK for the received data.
-            pcb.recv_vars.next += static_cast<uint32_t>(data.size());
-            asio::co_spawn(executor_, send_tcp_packet(pcb, Tins::TCP::ACK),
-                           asio::detached);
-        }
+                        // Launch the flow's main run loop, but don't wait for it.
+                        asio::co_spawn(executor_, flow->run(), asio::detached);
+                        flows_[tuple] = std::move(flow); // Store the active flow.
+                    }
+                }
+                break;
+            }
 
-        // --- Connection Teardown (FIN handling) ---
-        if (tcp->flags() & Tins::TCP::FIN) {
-            fmt::println("TCP: Received FIN from {}:{}", tuple.src_ip.to_string(),
-                         tuple.src_port);
+            case TcpState::ESTABLISHED: {
+                // Handle incoming data from the client application.
+                if (const Tins::RawPDU *payload = tcp->template find_pdu<Tins::RawPDU>();
+                    payload && !payload->payload().empty()) {
+                    const auto &data = payload->payload();
 
-            // Acknowledge their FIN.
-            ++pcb.recv_vars.next;
-            pcb.state = TcpState::CLOSE_WAIT;
-            asio::co_spawn(executor_, send_tcp_packet(pcb, Tins::TCP::ACK),
-                           asio::detached);
+                    // Pass(copy the packet) the data UP to the TcpFlow via the PCB's buffer channel.
+                    co_await pcb.ctp_buf.async_send(
+                        {},
+                        std::make_unique<std::vector<uint8_t> >(data.begin(), data.end())
+                    );
 
-            // Immediately pretend our application is done and send our own FIN.
-            pcb.state = TcpState::LAST_ACK;
-            ++pcb.send_vars.next;
-            asio::co_spawn(executor_,
-                           send_tcp_packet(pcb, Tins::TCP::FIN | Tins::TCP::ACK),
-                           asio::detached);
+                    // Acknowledge the data we just received.
+                    pcb.recv_vars.next += static_cast<uint32_t>(data.size());
+                    asio::co_spawn(executor_, send_tcp_packet(pcb, Tins::TCP::ACK), asio::detached);
+                }
+
+                // Handle the client wanting to close the connection.
+                if (tcp->flags() & Tins::TCP::FIN) {
+                    fmt::println("TCP: Received FIN from {}:{}", tuple.src_ip.to_string(), tuple.src_port);
+
+                    // Acknowledge their FIN.
+                    ++pcb.recv_vars.next;
+                    asio::co_spawn(executor_, send_tcp_packet(pcb, Tins::TCP::ACK), asio::detached);
+
+                    // Transition state and signal our side (the TcpFlow) to shut down.
+                    pcb.state = TcpState::CLOSE_WAIT;
+                    pcb.ctp_buf.close(); // This signals the end of data to the TcpFlow.
+                }
+                break;
+            }
+
+            case TcpState::LAST_ACK: {
+                // This is the final ACK from the client, acknowledging our FIN.
+                if (tcp->flags() == Tins::TCP::ACK && tcp->ack_seq() == pcb.send_vars.next) {
+                    fmt::println("TCP: Connection fully closed for {}:{}",
+                                 tuple.src_ip.to_string(), tuple.src_port);
+                    // The connection is done. Clean up all state.
+                    connections_.erase(pcb_it);
+                    flows_.erase(tuple);
+                }
+                break;
+            }
+
+            // Other states like CLOSE_WAIT, FIN_WAIT_1, etc., would be handled here.
+            // For our simple proxy, this covers the main paths.
+            default:
+                break;
         }
     }
 
@@ -148,7 +188,7 @@ namespace stack::handlers {
     }
 
     asio::awaitable<void>
-    TcpHandler::send_tcp_packet(const tcp::Pcb &pcb, unsigned short flags,
+    TcpHandler::send_tcp_packet(const tcp::Pcb &pcb, const unsigned short flags,
                                 const Tins::PDU *payload) const {
         try {
             Tins::TCP tcp(pcb.id.src_port, pcb.id.dst_port);
@@ -190,13 +230,13 @@ namespace stack::handlers {
         }
     }
 
-    void TcpHandler::terminate_connection(const tcp::four_tuple& id) {
+    void TcpHandler::terminate_connection(const tcp::four_tuple &id) {
         const auto pcb_it = connections_.find(id);
         if (pcb_it == connections_.end()) {
             return; // Already cleaned up
         }
 
-        tcp::Pcb& pcb = pcb_it->second;
+        tcp::Pcb &pcb = pcb_it->second;
         fmt::println("TCP Handler: Terminating connection for {}:{}",
                      id.src_ip.to_string(), id.src_port);
 

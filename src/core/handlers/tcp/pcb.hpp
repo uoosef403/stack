@@ -43,12 +43,18 @@ namespace stack::tcp {
             dst_port = tcp->dport();
         }
 
-        // Comparison operator for use in maps
-        bool operator<(const four_tuple &other) const {
-            return std::tie(src_ip, dst_ip, src_port, dst_port) <
-                   std::tie(other.src_ip, other.dst_ip, other.src_port,
-                            other.dst_port);
+        // equality operator overloading for std::map
+        bool operator==(const four_tuple& other) const {
+            return std::tie(src_ip, dst_ip, src_port, dst_port) ==
+                   std::tie(other.src_ip, other.dst_ip, other.src_port, other.dst_port);
         }
+
+        // less-than operator overloading for std::map
+        bool operator<(const four_tuple& other) const {
+            return std::tie(src_ip, dst_ip, src_port, dst_port) <
+                   std::tie(other.src_ip, other.dst_ip, other.src_port, other.dst_port);
+        }
+
     };
 
     class Pcb {

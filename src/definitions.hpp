@@ -5,7 +5,7 @@
 #include <boost/asio/signal_set.hpp>
 #include <boost/asio/experimental/channel.hpp>
 
-namespace  asio = boost::asio;
+namespace asio = boost::asio;
 
 // A smart pointer to a raw packet data buffer.
 using PacketBufferPtr = std::unique_ptr<std::vector<uint8_t>>;
