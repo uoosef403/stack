@@ -4,8 +4,9 @@
 #include "core/dispatcher.hpp"
 #include "core/handlers/icmp_handler.hpp"
 #include "core/handlers/tcp_handler.hpp"
+#include "core/proxy/clients/socks5/client.hpp"
 
-int main() {
+int main(int argc, char* argv[]) {
 #ifdef DEBUG
     setvbuf(stdout, nullptr, _IONBF, 0);
 #endif
@@ -19,6 +20,38 @@ int main() {
 
         constexpr auto ICMP_HANDLER_NUMBER = 1;
         constexpr auto TCP_HANDLER_NUMBER = 6;
+
+        // --- 1. Check for and Parse Command-Line Argument ---
+        if (argc < 2) {
+            fmt::println(stderr, "Usage: {} <socks5_ip:port>", argv[0]);
+            return 1;
+        }
+
+        std::string socks_arg(argv[1]);
+        size_t colon_pos = socks_arg.find_last_of(':');
+        if (colon_pos == std::string::npos) {
+            throw std::runtime_error("Invalid SOCKS endpoint format. Expected ip:port");
+        }
+
+        std::string socks_ip_str = socks_arg.substr(0, colon_pos);
+        std::string socks_port_str = socks_arg.substr(colon_pos + 1);
+
+        // --- 2. Convert Strings and Create the Endpoint ---
+        boost::system::error_code ec;
+        auto socks_ip = asio::ip::make_address(socks_ip_str, ec);
+        if (ec) {
+            throw std::runtime_error("Invalid SOCKS IP address: " + ec.message());
+        }
+
+        unsigned long socks_port_ul = std::stoul(socks_port_str);
+        if (socks_port_ul > 65535) {
+            throw std::runtime_error("Invalid SOCKS port number: " + std::to_string(socks_port_ul));
+        }
+
+        asio::ip::tcp::endpoint socks_endpoint(socks_ip, static_cast<uint16_t>(socks_port_ul));
+
+        fmt::println("Proxying through SOCKS5 server at {}:{}",
+            socks_endpoint.address().to_string(), socks_endpoint.port());
 
         asio::io_context io_context;
 
@@ -44,7 +77,10 @@ int main() {
 
         // Use the type alias to declare your factory lambda
         stack::handlers::ProxyClientFactory socks5_factory = [&]() -> std::unique_ptr<stack::proxy::clients::IProxyClient> {
-            return nullptr;
+            return std::make_unique<stack::proxy::clients::Socks5Client>(
+                io_context.get_executor(),
+                socks_endpoint
+            );
         };
 
         auto tcp_handler = std::make_unique<stack::handlers::TcpHandler>(
