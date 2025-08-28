@@ -52,8 +52,6 @@ namespace stack::tcp {
     };
 
     class Pcb {
-        asio::any_io_executor executor_;
-
     public:
         explicit Pcb(asio::any_io_executor executor, four_tuple tuple)
             : executor_(std::move(executor)),
@@ -62,6 +60,7 @@ namespace stack::tcp {
               ctp_buf(executor_, 128),
               ptc_buf(executor_, 128) {
         }
+        asio::any_io_executor executor_;
 
         four_tuple id;
         TcpState state;

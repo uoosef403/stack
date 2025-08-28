@@ -2,15 +2,8 @@
 
 #include "definitions.hpp"
 #include "iprotocol_handler.hpp"
-
-namespace stack::tcp {
-    class Pcb;
-    struct four_tuple;
-}
-
-namespace stack::proxy {
-    class TcpFlow;
-}
+#include "core/proxy/tcp_flow.hpp"
+#include "tcp/pcb.hpp"
 
 namespace stack::handlers {
     class TcpHandler final : public IProtocolHandler {
@@ -43,8 +36,10 @@ namespace stack::handlers {
         asio::awaitable<void> send_tcp_packet(const tcp::Pcb &pcb, unsigned short flags,
                                               const Tins::PDU *payload = nullptr) const;
 
+        void terminate_connection(const tcp::four_tuple& id);
+
         // Map to store and look up all active connections.
-        std::unordered_map<tcp::four_tuple, tcp::Pcb> connections_;
-        std::unordered_map<tcp::four_tuple, std::unique_ptr<proxy::TcpFlow>> flows_;
+        std::map<tcp::four_tuple, tcp::Pcb> connections_;
+        std::map<tcp::four_tuple, std::unique_ptr<proxy::TcpFlow>> flows_;
     };
 }

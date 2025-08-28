@@ -189,4 +189,27 @@ namespace stack::handlers {
             fmt::println(stderr, "Error sending TCP packet: {}", e.what());
         }
     }
+
+    void TcpHandler::terminate_connection(const tcp::four_tuple& id) {
+        const auto pcb_it = connections_.find(id);
+        if (pcb_it == connections_.end()) {
+            return; // Already cleaned up
+        }
+
+        tcp::Pcb& pcb = pcb_it->second;
+        fmt::println("TCP Handler: Terminating connection for {}:{}",
+                     id.src_ip.to_string(), id.src_port);
+
+        // Send an RST packet
+        // Note: The sequence number for an RST is often just the last acknowledged number.
+        asio::co_spawn(
+            executor_,
+            send_tcp_packet(pcb, Tins::TCP::RST | Tins::TCP::ACK),
+            asio::detached
+        );
+
+        // Clean up the state
+        flows_.erase(id);
+        connections_.erase(id);
+    }
 } // namespace stack::handlers
