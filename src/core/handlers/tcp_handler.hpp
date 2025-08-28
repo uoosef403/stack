@@ -35,13 +35,15 @@ namespace stack::handlers {
             requires (std::is_same_v<IP_TYPE, Tins::IP> || std::is_same_v<IP_TYPE, Tins::IPv6>);
 
         template<typename IP_TYPE>
-        void handle_syn(const IP_TYPE &ip_packet)
+        asio::awaitable<void> handle_syn(const IP_TYPE &ip_packet)
             requires (std::is_same_v<IP_TYPE, Tins::IP> || std::is_same_v<IP_TYPE, Tins::IPv6>);
 
         asio::awaitable<void> send_tcp_packet(const tcp::Pcb &pcb, unsigned short flags,
                                               const Tins::PDU *payload = nullptr) const;
 
-        void terminate_connection(const tcp::four_tuple& id);
+        asio::awaitable<void> send_flow_packets(tcp::four_tuple id);
+
+        asio::awaitable<void> terminate_connection(const tcp::four_tuple& id);
 
         // Map to store and look up all active connections.
         std::map<tcp::four_tuple, tcp::Pcb> connections_;
