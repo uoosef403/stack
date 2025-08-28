@@ -1,8 +1,16 @@
 #pragma once
-#include "iprotocol_handler.hpp"
+
 #include "definitions.hpp"
-#include "tcp/pcb.hpp"
-#include <map>
+#include "iprotocol_handler.hpp"
+
+namespace stack::tcp {
+    class Pcb;
+    struct four_tuple;
+}
+
+namespace stack::proxy {
+    class TcpFlow;
+}
 
 namespace stack::handlers {
     class TcpHandler final : public IProtocolHandler {
@@ -15,6 +23,9 @@ namespace stack::handlers {
         void handle_ipv4(std::unique_ptr<Tins::IP> packet) override;
 
         void handle_ipv6(std::unique_ptr<Tins::IPv6> packet) override;
+
+        // A function that takes a connection ID and signals an error.
+        using FlowErrorCallback = std::function<void(const tcp::four_tuple&)>;
 
     private:
         asio::any_io_executor executor_;
@@ -33,6 +44,7 @@ namespace stack::handlers {
                                               const Tins::PDU *payload = nullptr) const;
 
         // Map to store and look up all active connections.
-        std::map<tcp::four_tuple, tcp::Pcb> connections_;
+        std::unordered_map<tcp::four_tuple, tcp::Pcb> connections_;
+        std::unordered_map<tcp::four_tuple, std::unique_ptr<proxy::TcpFlow>> flows_;
     };
 }
