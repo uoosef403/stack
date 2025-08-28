@@ -4,6 +4,8 @@
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 
+namespace stack::handlers {
+
 IcmpHandler::IcmpHandler(
     asio::any_io_executor executor,
     IPPacketChannel &outgoing_channel,
@@ -76,4 +78,6 @@ asio::awaitable<void> IcmpHandler::send_echo_reply(std::unique_ptr<IpPacket> req
     } catch (const std::exception &e) {
         fmt::println(stderr, "Error sending ICMP reply: {}", e.what());
     }
+}
+
 }

@@ -4,6 +4,7 @@
 #include "tcp/pcb.hpp"
 #include <map>
 
+namespace stack::handlers {
 class TcpHandler final : public IProtocolHandler {
 public:
     TcpHandler(
@@ -34,3 +35,5 @@ private:
     // Map to store and look up all active connections.
     std::map<stack::tcp::four_tuple, stack::tcp::Pcb> connections_;
 };
+
+}
