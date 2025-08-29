@@ -4,11 +4,9 @@
 #include <tins/tins.h>
 
 Dispatcher::Dispatcher(const asio::any_io_executor& executor,
-                       IPPacketChannel& incoming_channel,
-                       IPPacketChannel& outgoing_channel)
+                       IPPacketChannel& incoming_channel)
     : executor_(executor),
-      incoming_channel_(incoming_channel),
-      outgoing_channel_(outgoing_channel)
+      incoming_channel_(incoming_channel)
 {
 }
 

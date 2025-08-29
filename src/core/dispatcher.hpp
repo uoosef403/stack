@@ -11,8 +11,7 @@ class Dispatcher
 public:
     Dispatcher(
         const asio::any_io_executor& executor,
-        IPPacketChannel& incoming_channel,
-        IPPacketChannel& outgoing_channel
+        IPPacketChannel& incomming_channel
     );
 
     // Destructor brings the interface down.
@@ -32,7 +31,6 @@ public:
 private:
     asio::any_io_executor executor_;
     IPPacketChannel& incoming_channel_;
-    IPPacketChannel& outgoing_channel_;
 
     using HandlersMap = std::map<uint8_t, std::unique_ptr<IProtocolHandler>>;
     HandlersMap handlers_;
