@@ -100,6 +100,7 @@ namespace stack::handlers {
                         // Launch the flow's main run loop, but don't wait for it.
                         asio::co_spawn(executor_, flow->run(), asio::detached);
                         flows_[tuple] = std::move(flow); // Store the active flow.
+                        asio::co_spawn(executor_, send_flow_packets(tuple), asio::detached);
                     }
                 }
                 break;
