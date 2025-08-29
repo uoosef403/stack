@@ -24,7 +24,7 @@ namespace stack::handlers {
         asio::awaitable<void> send_echo_reply(std::unique_ptr<IpPacket> request);
 
         asio::any_io_executor executor_;
-        IPPacketChannel &outgoing_channel_;
+        IPPacketChannel &device_outgoing_channel_;
         asio::ip::address_v4 tun_address_v4_;
         asio::ip::address_v6 tun_address_v6_;
     };

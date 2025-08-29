@@ -5,10 +5,8 @@
 
 namespace stack::proxy {
     TcpFlow::TcpFlow(std::unique_ptr<clients::IProxyClient> client, tcp::Pcb &pcb,
-                     IPPacketChannel &outgoing_channel,
                      FlowErrorCallback on_error)
         : client_(std::move(client)), pcb_(pcb),
-          outgoing_channel_(outgoing_channel),
           on_error_(std::move(on_error)), // Initialize with the same executor
           real_socket_(pcb.executor_) {
     }

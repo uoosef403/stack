@@ -12,7 +12,7 @@ namespace stack::handlers {
         const std::string &tun_address_v4,
         const std::string &tun_address_v6
     ) : executor_(std::move(executor)),
-        outgoing_channel_(outgoing_channel) {
+        device_outgoing_channel_(outgoing_channel) {
         tun_address_v4_ = asio::ip::make_address_v4(tun_address_v4);
         tun_address_v6_ = asio::ip::make_address_v6(tun_address_v6);
     }
@@ -74,7 +74,7 @@ namespace stack::handlers {
 
             // Wrap into unique_ptr<vector<char>> for the channel
             auto response_ptr = std::make_unique<std::vector<uint8_t> >(raw_response.begin(), raw_response.end());
-            co_await outgoing_channel_.async_send({}, std::move(response_ptr));
+            co_await device_outgoing_channel_.async_send({}, std::move(response_ptr));
         } catch (const std::exception &e) {
             fmt::println(stderr, "Error sending ICMP reply: {}", e.what());
         }

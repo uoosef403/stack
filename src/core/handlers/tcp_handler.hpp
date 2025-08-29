@@ -26,7 +26,7 @@ namespace stack::handlers {
         void handle_ipv6(std::unique_ptr<Tins::IPv6> packet) override;
     private:
         asio::any_io_executor executor_;
-        IPPacketChannel &outgoing_channel_;
+        IPPacketChannel &device_outgoing_channel_;
 
         ProxyClientFactory proxy_client_factory_;
 

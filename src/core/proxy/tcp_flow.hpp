@@ -14,7 +14,6 @@ namespace stack::proxy {
         // Takes ownership of a client backend and references to the PCB and outgoing channel.
         TcpFlow(std::unique_ptr<clients::IProxyClient> client,
                 tcp::Pcb& pcb,
-                IPPacketChannel& outgoing_channel,
                 FlowErrorCallback on_error);
 
         // Starts the proxy connection and the data relay coroutines.
@@ -27,7 +26,6 @@ namespace stack::proxy {
 
         std::unique_ptr<clients::IProxyClient> client_;
         tcp::Pcb& pcb_;
-        IPPacketChannel& outgoing_channel_;
         FlowErrorCallback on_error_;
         asio::ip::tcp::socket real_socket_; // The real socket to the proxy server
     };

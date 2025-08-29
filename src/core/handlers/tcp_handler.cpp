@@ -20,7 +20,7 @@ namespace stack::handlers {
     TcpHandler::TcpHandler(asio::any_io_executor executor,
                            IPPacketChannel &outgoing_channel,
                            ProxyClientFactory factory)
-        : executor_(std::move(executor)), outgoing_channel_(outgoing_channel),
+        : executor_(std::move(executor)), device_outgoing_channel_(outgoing_channel),
           proxy_client_factory_(std::move(factory)) {
     }
 
@@ -94,7 +94,7 @@ namespace stack::handlers {
 
                         auto client = proxy_client_factory_();
                         auto flow = std::make_unique<proxy::TcpFlow>(
-                            std::move(client), pcb, outgoing_channel_, on_error_callback
+                            std::move(client), pcb, on_error_callback
                         );
 
                         // Launch the flow's main run loop, but don't wait for it.
@@ -225,7 +225,7 @@ namespace stack::handlers {
             auto response_ptr = std::make_unique<std::vector<uint8_t> >(
                 raw_response.begin(), raw_response.end());
 
-            co_await outgoing_channel_.async_send({}, std::move(response_ptr));
+            co_await device_outgoing_channel_.async_send({}, std::move(response_ptr));
         } catch (const std::exception &e) {
             fmt::println(stderr, "Error sending TCP packet: {}", e.what());
         }
