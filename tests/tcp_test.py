@@ -73,7 +73,7 @@ def test_data_transfer(conn_details):
         print(f"   [!] FAILED: Invalid ACK received. Expected ACK={expected_ack}, Got ACK={ack_reply[TCP].ack}")
         return None
 
-    print(f"   [A] Received correct ACK for data. Correct.")
+    print("   [A] Received correct ACK for data. Correct.")
     print("   [+] PASSED: Data transfer successful.")
     # Return updated sequence numbers
     conn_details["seq"] += len(payload)
@@ -106,7 +106,7 @@ def test_teardown(conn_details):
         return
 
     print("   [A] Received ACK for our FIN. Correct.")
-    print("   [*] Your stack should now send its own FIN/ACK. Check logs/Wireshark.")
+    print("   [*] The stack should now send its own FIN/ACK. Check logs/Wireshark.")
     print("   [+] PASSED: Teardown initiated correctly.")
 
 
