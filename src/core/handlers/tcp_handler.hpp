@@ -15,7 +15,7 @@ namespace stack::handlers {
     public:
         TcpHandler(
             asio::any_io_executor executor,
-            IPPacketChannel &outgoing_channel,
+            IPPacketChannel &device_outgoing_channel_,
             ProxyClientFactory factory
         );
 

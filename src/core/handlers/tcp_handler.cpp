@@ -1,4 +1,5 @@
 #include "tcp_handler.hpp"
+#include <fmt/base.h>
 #include <fmt/core.h>
 #include <random> // For generating ISN
 
@@ -210,14 +211,16 @@ namespace stack::handlers {
                 tcp.inner_pdu(payload->clone());
             }
 
+            // swapping the source ip and dest ip in response packet to trick the kernel in
+            // that the original remote host is responding.
             Tins::byte_array raw_response;
             if (pcb.id.is_ipv6()) {
-                Tins::IPv6 ip6(pcb.id.dst_ip.to_string(),
-                               pcb.id.src_ip.to_string());
+                Tins::IPv6 ip6(pcb.id.src_ip.to_string(),
+                               pcb.id.dst_ip.to_string());
                 ip6.inner_pdu(tcp);
                 raw_response = ip6.serialize();
             } else {
-                Tins::IP ip4(pcb.id.dst_ip.to_string(), pcb.id.src_ip.to_string());
+                Tins::IP ip4(pcb.id.src_ip.to_string(), pcb.id.dst_ip.to_string());
                 ip4.inner_pdu(tcp);
                 raw_response = ip4.serialize();
             }
