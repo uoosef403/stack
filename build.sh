@@ -50,7 +50,7 @@ RELEASE_DIR="$BUILD_DIR-release"
 setup_vcpkg() {
 	if [ ! -d "$VCPKG_ROOT" ]; then
 		echo "--- vcpkg not found. Setting up... ---"
-		git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+		git clone --depth=1 https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
 		"$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
 	fi
 }
