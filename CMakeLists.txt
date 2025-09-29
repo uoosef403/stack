@@ -13,7 +13,7 @@ cmake_policy(SET CMP0167 NEW)
 cmake_policy(SET CMP0169 NEW)  # Allow FetchContent_MakeAvailable for vcpkg
 
 # =============================================================================
-# vcpkg Package Manager Setup (Before project() call)
+# vcpkg Package Manager Setup
 # =============================================================================
 
 include(FetchContent)
@@ -83,6 +83,21 @@ find_package(Boost REQUIRED COMPONENTS asio)
 
 # fmt formatting library
 find_package(fmt CONFIG REQUIRED)
+
+# Google Test testing framework
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+)
+
+# Configure Google Test
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+# Enable testing
+enable_testing()
+include(GoogleTest)
 
 # libtins network packet library (with custom configuration)
 set(LIBTINS_ENABLE_PCAP OFF CACHE BOOL "Disable libpcap/Npcap dependency")
@@ -225,4 +240,58 @@ if(WIN32)
 
     # Apply WinTun configuration to main target
     copy_wintun_dll(${PROJECT_NAME})
+endif()
+
+# =============================================================================
+# Testing Configuration
+# =============================================================================
+
+# Collect test files
+file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
+)
+
+# Only create test targets if test files exist
+if(TEST_SOURCES)
+    # Create test executable
+    add_executable(${PROJECT_NAME}_tests ${TEST_SOURCES})
+    
+    # Configure test target with same settings as main target
+    target_compile_options(${PROJECT_NAME}_tests PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+    )
+    
+    # Include directories for tests
+    target_include_directories(${PROJECT_NAME}_tests PRIVATE 
+        src
+        ${libtins_SOURCE_DIR}/include
+    )
+    
+    # Link test dependencies
+    target_link_libraries(${PROJECT_NAME}_tests PRIVATE
+        gtest_main
+        gmock_main
+        Boost::asio
+        fmt::fmt
+        tins
+    )
+    
+    # Platform-specific test linking
+    if(WIN32)
+        target_compile_definitions(${PROJECT_NAME}_tests PRIVATE _WIN32_WINNT=0x0601)
+        target_link_libraries(${PROJECT_NAME}_tests PRIVATE 
+            iphlpapi 
+            winmm 
+            ws2_32 
+            Rpcrt4
+        )
+    endif()
+    
+    # Discover and register tests
+    gtest_discover_tests(${PROJECT_NAME}_tests)
+    
+    message(STATUS "Test executable '${PROJECT_NAME}_tests' will be created")
+else()
+    message(STATUS "No test files found in tests/ directory - skipping test target creation")
 endif()
