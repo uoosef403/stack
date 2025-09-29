@@ -254,7 +254,7 @@ file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
 # Only create test targets if test files exist
 if(TEST_SOURCES)
     # Create test executable
-    add_executable(${PROJECT_NAME}_tests ${TEST_SOURCES})
+    add_executable(${PROJECT_NAME}_tests ${TEST_SOURCES} ${CORE_SOURCES})
     
     # Configure test target with same settings as main target
     target_compile_options(${PROJECT_NAME}_tests PRIVATE
