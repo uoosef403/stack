@@ -65,22 +65,11 @@ static void RunLessThanCases(const std::string& src_a,
 }
 
 TEST_F(ConnectionIdTest, EqualityOperator_IPv4_and_IPv6) {
-    std::vector<std::tuple<std::string, std::string, std::string>> cases = {
-        // IPv4: src, dst, alt_src
-        {"1.1.1.1", "2.2.2.2", "9.9.9.9"},
-        // IPv6: src, dst, alt_src
-        {"2001:db8::1", "2001:db8::2", "2001:db8::9"}
-    };
-
-    for (const auto& c : cases) {
-        RunEqualityCase(std::get<0>(c), std::get<1>(c), std::get<2>(c));
-    }
+    RunEqualityCase("1.1.1.1", "2.2.2.2", "9.9.9.9");
+    RunEqualityCase("2001:db8::1", "2001:db8::2", "2001:db8::9");
 }
 
 TEST_F(ConnectionIdTest, LessThanOperator_IPv4_and_IPv6) {
-    // IPv4 case: ensure src_a < src_b
     RunLessThanCases("1.1.1.1", "1.1.1.2", "8.8.8.8");
-
-    // IPv6 case: ensure src_a < src_b
     RunLessThanCases("2001:db8::1", "2001:db8::2", "2001:4860:4860::8888");
 }
