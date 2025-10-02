@@ -9,7 +9,7 @@ namespace stack::handlers {
     // A factory function that creates proxy client instances.
     using ProxyClientFactory = std::function<std::unique_ptr<proxy::clients::IProxyClient>()>;
     // A function that takes a connection ID and signals an error.
-    using FlowErrorCallback = std::function<void(const tcp::four_tuple&)>;
+    using FlowErrorCallback = std::function<void(const network::ConnectionId&)>;
 
     class TcpHandler final : public IProtocolHandler {
     public:
@@ -41,12 +41,12 @@ namespace stack::handlers {
         asio::awaitable<void> send_tcp_packet(const tcp::Pcb &pcb, unsigned short flags,
                                               const Tins::PDU *payload = nullptr) const;
 
-        asio::awaitable<void> send_flow_packets(tcp::four_tuple id);
+        asio::awaitable<void> send_flow_packets(network::ConnectionId id);
 
-        asio::awaitable<void> terminate_connection(const tcp::four_tuple& id);
+        asio::awaitable<void> terminate_connection(const network::ConnectionId& id);
 
         // Map to store and look up all active connections.
-        std::map<tcp::four_tuple, tcp::Pcb> connections_;
-        std::map<tcp::four_tuple, std::unique_ptr<proxy::TcpFlow>> flows_;
+        std::map<network::ConnectionId, tcp::Pcb> connections_;
+        std::map<network::ConnectionId, std::unique_ptr<proxy::TcpFlow>> flows_;
     };
 }

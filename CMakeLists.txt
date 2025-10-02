@@ -67,12 +67,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile commands for cla
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Threading configuration
-set(CMAKE_THREAD_LIBS_INIT "-lpthread")
-set(CMAKE_HAVE_THREADS_LIBRARY 1)
-set(CMAKE_USE_WIN32_THREADS_INIT 0)
-set(CMAKE_USE_PTHREADS_INIT 1)
-set(THREADS_PREFER_PTHREAD_FLAG ON)
+# Threading configuration - platform specific
+if(WIN32)
+    # Use Win32 threads on Windows
+    set(CMAKE_USE_WIN32_THREADS_INIT 1)
+    set(CMAKE_USE_PTHREADS_INIT 0)
+else()
+    # Use pthread on Unix-like systems
+    set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+    set(CMAKE_USE_WIN32_THREADS_INIT 0)  
+    set(CMAKE_USE_PTHREADS_INIT 1)
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+endif()
+
+find_package(Threads REQUIRED)
 
 # =============================================================================
 # Dependencies
@@ -166,6 +174,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Boost::asio
     fmt::fmt
     tins
+    Threads::Threads
 )
 
 # =============================================================================
@@ -204,30 +213,42 @@ if(WIN32)
     )
     FetchContent_MakeAvailable(wintun)
 
+    # Set WinTun directories for global use
+    set(WINTUN_DIR ${wintun_SOURCE_DIR})
+    
+    # Debug: Print WinTun directory for troubleshooting
+    message(STATUS "WinTun directory: ${WINTUN_DIR}")
+    message(STATUS "WinTun include directory: ${WINTUN_DIR}/include")
+    
+    # Verify WinTun header exists
+    if(NOT EXISTS "${WINTUN_DIR}/include/wintun.h")
+        message(FATAL_ERROR "WinTun header not found at ${WINTUN_DIR}/include/wintun.h")
+    else()
+        message(STATUS "WinTun header found at ${WINTUN_DIR}/include/wintun.h")
+    endif()
+    
+    # Add WinTun include directory to main target
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${WINTUN_DIR}/include)
+    
+    # Determine architecture-specific DLL path
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64")
+            set(WINTUN_ARCH_DIR "bin/arm64")
+        else()
+            set(WINTUN_ARCH_DIR "bin/amd64")
+        endif()
+    else()
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM")
+            set(WINTUN_ARCH_DIR "bin/arm")
+        else()
+            set(WINTUN_ARCH_DIR "bin/x86")
+        endif()
+    endif()
+
+    set(WINTUN_DLL "${WINTUN_DIR}/${WINTUN_ARCH_DIR}/wintun.dll")
+
     # Function to copy WinTun DLL to executable directory
     function(copy_wintun_dll TARGET_NAME)
-        set(WINTUN_DIR ${wintun_SOURCE_DIR})
-
-        # Add WinTun include directory
-        target_include_directories(${TARGET_NAME} SYSTEM PRIVATE ${WINTUN_DIR}/include)
-
-        # Determine architecture-specific DLL path
-        if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-            if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64")
-                set(WINTUN_ARCH_DIR "bin/arm64")
-            else()
-                set(WINTUN_ARCH_DIR "bin/amd64")
-            endif()
-        else()
-            if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM")
-                set(WINTUN_ARCH_DIR "bin/arm")
-            else()
-                set(WINTUN_ARCH_DIR "bin/x86")
-            endif()
-        endif()
-
-        set(WINTUN_DLL "${WINTUN_DIR}/${WINTUN_ARCH_DIR}/wintun.dll")
-
         # Copy DLL to output directory after build
         add_custom_command(
             TARGET ${TARGET_NAME} POST_BUILD
@@ -275,6 +296,7 @@ if(TEST_SOURCES)
         Boost::asio
         fmt::fmt
         tins
+        Threads::Threads
     )
     
     # Platform-specific test linking
@@ -286,6 +308,12 @@ if(TEST_SOURCES)
             ws2_32 
             Rpcrt4
         )
+        
+        # Add WinTun include directory to test target
+        target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${WINTUN_DIR}/include)
+        
+        # Copy WinTun DLL for test target
+        copy_wintun_dll(${PROJECT_NAME}_tests)
     endif()
     
     # Discover and register tests

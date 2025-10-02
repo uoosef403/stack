@@ -14,7 +14,7 @@ namespace stack::proxy {
     asio::awaitable<void> TcpFlow::run() {
         try {
             fmt::println("TCP Flow: Starting for {}:{}",
-                         pcb_.id.dst_ip.to_string(), pcb_.id.dst_port);
+                         pcb_.id.dst_ip().to_string(), pcb_.id.dst_port());
 
             // 1. Use the client to connect to the proxy.
             real_socket_ = co_await client_->connect(pcb_.id);
@@ -24,7 +24,7 @@ namespace stack::proxy {
             asio::co_spawn(pcb_.executor_, relay_to_client(), asio::detached);
         } catch (const std::exception &e) {
             fmt::println(stderr, "TCP Flow: Error for {}:{}: {}. Signaling handler.",
-                     pcb_.id.dst_ip.to_string(), pcb_.id.dst_port, e.what());
+                     pcb_.id.dst_ip().to_string(), pcb_.id.dst_port(), e.what());
 
             // Call the tcp handler to report the problem
             on_error_(pcb_.id);

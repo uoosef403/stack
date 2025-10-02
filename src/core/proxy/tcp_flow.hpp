@@ -7,7 +7,7 @@ namespace stack::proxy {
     // Represents a single, end-to-end proxied TCP connection.
 
     // A function that takes a connection ID and signals an error.
-    using FlowErrorCallback = std::function<void(const tcp::four_tuple&)>;
+    using FlowErrorCallback = std::function<void(const network::ConnectionId&)>;
 
     class TcpFlow {
     public:

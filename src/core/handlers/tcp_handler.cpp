@@ -50,8 +50,8 @@ namespace stack::handlers {
         const auto *tcp = packet->template find_pdu<Tins::TCP>();
         if (!tcp) co_return;
 
-        tcp::four_tuple tuple(*packet);
-        const auto pcb_it = connections_.find(tuple);
+        network::ConnectionId connection_id(*packet);
+        const auto pcb_it = connections_.find(connection_id);
 
         // --- Handle new connection attempts ---
         if (pcb_it == connections_.end()) {
@@ -71,7 +71,7 @@ namespace stack::handlers {
 
         if ((has_payload || (tcp->flags() & Tins::TCP::FIN)) && tcp->seq() != pcb.recv_vars.next) {
             fmt::println("TCP: Ignoring out-of-order packet for {}:{}",
-                         tuple.src_ip.to_string(), tuple.src_port);
+                         connection_id.src_ip().to_string(), connection_id.src_port());
             // In a real stack, you might send a duplicate ACK here.
             co_return;
         }
@@ -81,13 +81,13 @@ namespace stack::handlers {
             case TcpState::SYN_RECEIVED: {
                 if (tcp->flags() == Tins::TCP::ACK && tcp->ack_seq() == pcb.send_vars.next) {
                     fmt::println("TCP: Connection ESTABLISHED for {}:{}",
-                                 tuple.src_ip.to_string(), tuple.src_port);
+                                 connection_id.src_ip().to_string(), connection_id.src_port());
                     pcb.state = TcpState::ESTABLISHED;
                     pcb.send_vars.unacknowledged = tcp->ack_seq();
 
                     // The connection is established, so we create and launch the high-level flow.
-                    if (!flows_.contains(tuple)) {
-                        auto on_error_callback = [this](const tcp::four_tuple id) { 
+                    if (!flows_.contains(connection_id)) {
+                        auto on_error_callback = [this](const network::ConnectionId id) {
                             asio::co_spawn(this->executor_,
                                         this->terminate_connection(id),
                                         asio::detached);
@@ -100,8 +100,8 @@ namespace stack::handlers {
 
                         // Launch the flow's main run loop, but don't wait for it.
                         asio::co_spawn(executor_, flow->run(), asio::detached);
-                        flows_[tuple] = std::move(flow); // Store the active flow.
-                        asio::co_spawn(executor_, send_flow_packets(tuple), asio::detached);
+                        flows_[connection_id] = std::move(flow); // Store the active flow.
+                        asio::co_spawn(executor_, send_flow_packets(connection_id), asio::detached);
                     }
                 }
                 break;
@@ -126,7 +126,7 @@ namespace stack::handlers {
 
                 // Handle the client wanting to close the connection.
                 if (tcp->flags() & Tins::TCP::FIN) {
-                    fmt::println("TCP: Received FIN from {}:{}", tuple.src_ip.to_string(), tuple.src_port);
+                    fmt::println("TCP: Received FIN from {}:{}", connection_id.src_ip().to_string(), connection_id.src_port());
 
                     // Acknowledge their FIN.
                     ++pcb.recv_vars.next;
@@ -143,10 +143,10 @@ namespace stack::handlers {
                 // This is the final ACK from the client, acknowledging our FIN.
                 if (tcp->flags() == Tins::TCP::ACK && tcp->ack_seq() == pcb.send_vars.next) {
                     fmt::println("TCP: Connection fully closed for {}:{}",
-                                 tuple.src_ip.to_string(), tuple.src_port);
+                                 connection_id.src_ip().to_string(), connection_id.src_port());
                     // The connection is done. Clean up all state.
                     connections_.erase(pcb_it);
-                    flows_.erase(tuple);
+                    flows_.erase(connection_id);
                 }
                 break;
             }
@@ -162,14 +162,14 @@ namespace stack::handlers {
     asio::awaitable<void> TcpHandler::handle_syn(const IP_TYPE &ip_packet)
         requires(std::is_same_v<IP_TYPE, Tins::IP> ||
                  std::is_same_v<IP_TYPE, Tins::IPv6>) {
-        tcp::four_tuple tuple(ip_packet);
+        network::ConnectionId connection_id(ip_packet);
         const auto *tcp_syn = ip_packet.template find_pdu<Tins::TCP>();
 
-        fmt::println("TCP: Received SYN from {}:{}", tuple.src_ip.to_string(),
-                     tuple.src_port);
+        fmt::println("TCP: Received SYN from {}:{}", connection_id.src_ip().to_string(),
+                     connection_id.src_port());
 
         // 1. Construct the Pcb directly inside the map.
-        auto [it, success] = connections_.try_emplace(tuple, executor_, tuple);
+        auto [it, success] = connections_.try_emplace(connection_id, executor_, connection_id);
         if (!success) {
             fmt::println(stderr, "Error: tcp connection already existed or some internal error occurred");
             co_return; // Connection already exists or is being set up.
@@ -193,7 +193,7 @@ namespace stack::handlers {
     TcpHandler::send_tcp_packet(const tcp::Pcb &pcb, const unsigned short flags,
                                 const Tins::PDU *payload) const {
         try {
-            Tins::TCP tcp(pcb.id.src_port, pcb.id.dst_port);
+            Tins::TCP tcp(pcb.id.src_port(), pcb.id.dst_port());
             tcp.flags(flags);
 
             // Set sequence number based on what flags are set.
@@ -215,12 +215,12 @@ namespace stack::handlers {
             // that the original remote host is responding.
             Tins::byte_array raw_response;
             if (pcb.id.is_ipv6()) {
-                Tins::IPv6 ip6(pcb.id.src_ip.to_string(),
-                               pcb.id.dst_ip.to_string());
+                Tins::IPv6 ip6(pcb.id.src_ip().to_string(),
+                               pcb.id.dst_ip().to_string());
                 ip6.inner_pdu(tcp);
                 raw_response = ip6.serialize();
             } else {
-                Tins::IP ip4(pcb.id.src_ip.to_string(), pcb.id.dst_ip.to_string());
+                Tins::IP ip4(pcb.id.src_ip().to_string(), pcb.id.dst_ip().to_string());
                 ip4.inner_pdu(tcp);
                 raw_response = ip4.serialize();
             }
@@ -235,7 +235,7 @@ namespace stack::handlers {
     }
 
     asio::awaitable<void> 
-    TcpHandler::send_flow_packets(tcp::four_tuple id) {
+    TcpHandler::send_flow_packets(network::ConnectionId id) {
         try {
             while (true) {
                 auto pcb_it = connections_.find(id);
@@ -275,14 +275,14 @@ namespace stack::handlers {
             fmt::println(
                 stderr, 
                 "TCP Handler: Packetizer for {} failed: {}", 
-                id.src_ip.to_string(), 
+                id.src_ip().to_string(), 
                 e.what()
             );
         }
     }
 
     asio::awaitable<void> 
-    TcpHandler::terminate_connection(const tcp::four_tuple &id) {
+    TcpHandler::terminate_connection(const network::ConnectionId &id) {
         const auto pcb_it = connections_.find(id);
         if (pcb_it == connections_.end()) {
             co_return; // Already cleaned up
@@ -290,7 +290,7 @@ namespace stack::handlers {
 
         tcp::Pcb &pcb = pcb_it->second;
         fmt::println("TCP Handler: Terminating connection for {}:{}",
-                     id.src_ip.to_string(), id.src_port);
+                     id.src_ip().to_string(), id.src_port());
 
         // Send an RST packet
         // Note: The sequence number for an RST is often just the last acknowledged number.

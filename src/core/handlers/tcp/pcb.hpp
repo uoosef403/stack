@@ -16,7 +16,7 @@ namespace stack::tcp {
         }
         asio::any_io_executor executor_;
 
-        stack::network::ConnectionId id;
+        network::ConnectionId id;
         TcpState state;
 
         // Buffer for data going from the TcpFlow DOWN to the client app.

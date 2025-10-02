@@ -12,7 +12,7 @@ namespace stack::proxy::clients {
         // The connect method overrides the pure virtual function in the interface.
         // It performs the full SOCKS5 handshake and returns a connected socket.
         asio::awaitable<asio::ip::tcp::socket> connect(
-            const tcp::four_tuple& destination
+            const network::ConnectionId& destination
         ) override;
 
     private:

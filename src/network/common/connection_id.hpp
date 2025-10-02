@@ -43,7 +43,12 @@ class ConnectionId {
 	[[nodiscard]] const asio::ip::address &dst_ip() const { return dst_ip_; }
 	[[nodiscard]] uint16_t src_port() const { return src_port_; }
 	[[nodiscard]] uint16_t dst_port() const { return dst_port_; }
-
+	[[nodiscard]] bool is_ipv4() const { return src_ip_.is_v4(); }
+	[[nodiscard]] bool is_ipv6() const { return src_ip_.is_v6(); }
+	[[nodiscard]] std::string to_string() const {
+		return src_ip_.to_string() + ":" + std::to_string(src_port_) + " -> " +
+			   dst_ip_.to_string() + ":" + std::to_string(dst_port_);
+	}
 	// Comparison operators
 	bool operator==(const ConnectionId &other) const;
 	bool operator<(const ConnectionId &other) const;

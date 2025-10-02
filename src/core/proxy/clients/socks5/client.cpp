@@ -7,7 +7,7 @@ namespace stack::proxy::clients {
         : executor_(std::move(executor)), endpoint_(std::move(endpoint)) {}
 
     asio::awaitable<asio::ip::tcp::socket> Socks5Client::connect(
-        const tcp::four_tuple& destination)
+        const network::ConnectionId& destination)
     {
         using asio::use_awaitable;
 
@@ -34,19 +34,19 @@ namespace stack::proxy::clients {
         request.push_back(0x01); // CMD = CONNECT
         request.push_back(0x00); // RSV
 
-        if (destination.dst_ip.is_v4()) {
+        if (destination.dst_ip().is_v4()) {
             request.push_back(0x01); // ATYP = IPv4
-            auto bytes = destination.dst_ip.to_v4().to_bytes();
+            auto bytes = destination.dst_ip().to_v4().to_bytes();
             request.insert(request.end(), bytes.begin(), bytes.end());
-        } else if (destination.dst_ip.is_v6()) {
+        } else if (destination.dst_ip().is_v6()) {
             request.push_back(0x04); // ATYP = IPv6
-            auto bytes = destination.dst_ip.to_v6().to_bytes();
+            auto bytes = destination.dst_ip().to_v6().to_bytes();
             request.insert(request.end(), bytes.begin(), bytes.end());
         } else {
             throw std::runtime_error("SOCKS5: invalid destination address");
         }
 
-        uint16_t port_be = destination.dst_port;
+        uint16_t port_be = destination.dst_port();
 
         request.push_back(static_cast<uint8_t>(port_be >> 8));
         request.push_back(static_cast<uint8_t>(port_be & 0xFF));
@@ -85,7 +85,7 @@ namespace stack::proxy::clients {
         co_await asio::async_read(socket, asio::buffer(port_bytes), use_awaitable);
 
         fmt::println("SOCKS5: connection established to {}:{}",
-            destination.dst_ip.to_string(), destination.dst_port);
+            destination.dst_ip().to_string(), destination.dst_port());
 
         // 6. Return ready-to-use socket
         co_return std::move(socket);

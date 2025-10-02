@@ -15,7 +15,7 @@ public:
   // Establishes a connection to the destination via the proxy.
   // Returns a connected and ready-to-use socket on success.
   virtual asio::awaitable<asio::ip::tcp::socket>
-  connect(const stack::tcp::four_tuple &destination) = 0;
+  connect(const stack::network::ConnectionId &destination) = 0;
 };
 
 } // namespace proxy::clients
