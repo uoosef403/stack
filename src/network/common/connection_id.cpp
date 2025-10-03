@@ -1,5 +1,7 @@
 #include "connection_id.hpp"
 
+namespace asio = boost::asio;
+
 namespace stack::network {
 
 // Constructor from individual parts
@@ -9,14 +11,14 @@ ConnectionId::ConnectionId(asio::ip::address s_ip, asio::ip::address d_ip,
 	  dst_port_(d_port){};
 
 // equality operator overloading for std::map
-bool ConnectionId::operator==(const ConnectionId &other) const {
+bool ConnectionId::operator==(const ConnectionId &other) const noexcept {
 	return std::tie(src_ip_, dst_ip_, src_port_, dst_port_) ==
 		   std::tie(other.src_ip_, other.dst_ip_, other.src_port_,
 					other.dst_port_);
 }
 
 // less-than operator overloading for std::map
-bool ConnectionId::operator<(const ConnectionId &other) const {
+bool ConnectionId::operator<(const ConnectionId &other) const noexcept {
 	return std::tie(src_ip_, dst_ip_, src_port_, dst_port_) <
 		   std::tie(other.src_ip_, other.dst_ip_, other.src_port_,
 					other.dst_port_);

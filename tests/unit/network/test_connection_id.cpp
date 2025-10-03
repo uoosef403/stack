@@ -4,6 +4,8 @@
 #include <tuple>
 #include <string>
 
+namespace asio = boost::asio;
+
 class ConnectionIdTest : public ::testing::Test {
 protected:
 };
