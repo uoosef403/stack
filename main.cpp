@@ -5,7 +5,7 @@
 #include "core/handlers/tcp_handler.hpp"
 #include "core/proxy/clients/socks5/client.hpp"
 #include "device/tun.h"
-
+#include <filesystem>
 
 int main(int argc, char *argv[]) {
 #ifdef DEBUG
@@ -27,7 +27,10 @@ int main(int argc, char *argv[]) {
     stack::log::Logger::init();
 
     if (argc < 2) {
-      LOG_ERROR("Usage: {} <socks5_ip:port>", argv[0]);
+      // Extract just the executable name from the full path using std::filesystem
+      std::filesystem::path exe_path(argv[0]);
+      std::string exe_name = exe_path.filename().string();
+      LOG_ERROR("Usage: {} <socks5_ip:port>", exe_name);
       return 1;
     }
 
