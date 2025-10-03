@@ -6,10 +6,6 @@
 
 namespace asio = boost::asio;
 
-class ConnectionIdTest : public ::testing::Test {
-protected:
-};
-
 static void RunEqualityCase(const std::string& src,
                             const std::string& dst,
                             const std::string& alt_src) {
@@ -66,12 +62,12 @@ static void RunLessThanCases(const std::string& src_a,
     EXPECT_FALSE(id4 < id3);
 }
 
-TEST_F(ConnectionIdTest, EqualityOperator_IPv4_and_IPv6) {
+TEST(ConnectionIdTest, EqualityOperator_IPv4_and_IPv6) {
     RunEqualityCase("1.1.1.1", "2.2.2.2", "9.9.9.9");
     RunEqualityCase("2001:db8::1", "2001:db8::2", "2001:db8::9");
 }
 
-TEST_F(ConnectionIdTest, LessThanOperator_IPv4_and_IPv6) {
+TEST(ConnectionIdTest, LessThanOperator_IPv4_and_IPv6) {
     RunLessThanCases("1.1.1.1", "1.1.1.2", "8.8.8.8");
     RunLessThanCases("2001:db8::1", "2001:db8::2", "2001:4860:4860::8888");
 }
