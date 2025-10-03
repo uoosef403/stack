@@ -19,4 +19,4 @@ namespace stack::proxy::clients {
         asio::any_io_executor executor_;
         asio::ip::tcp::endpoint endpoint_;
     };
-}
+}  // namespace stack::proxy::clients

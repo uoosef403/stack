@@ -1,7 +1,7 @@
 {
   "dependencies": [
     "boost-asio",
-    "fmt"
+    "spdlog"
   ],
   "version": "0.1.0",
   "name": "stack"

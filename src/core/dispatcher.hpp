@@ -10,7 +10,7 @@ class Dispatcher
 {
 public:
     Dispatcher(
-        const asio::any_io_executor& executor,
+        asio::any_io_executor executor,
         IPPacketChannel& incomming_channel
     );
 

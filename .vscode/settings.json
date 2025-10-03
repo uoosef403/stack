@@ -1,10 +1,50 @@
 {
+    // CMake Configuration
     "cmake.useCMakePresets": "always",
-    "C_Cpp.default.cppStandard": "c++20",
-    "C_Cpp.default.cStandard": "c17",
-    "C_Cpp.errorSquiggles": "enabled",
-    "C_Cpp.codeAnalysis.runAutomatically": true,
+    "cmake.buildBeforeRun": true,
+    "cmake.saveBeforeBuild": true,
+    "cmake.clearOutputBeforeBuild": true,
+    "cmake.configureOnOpen": true,
+    "cmake.copyCompileCommands": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}/compile_commands.json",
+    "cmake.buildDirectory": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}",
+    "cmake.installPrefix": "${workspaceFolder}/out/install/${command:cmake.activeConfigurePresetName}",
+    "cmake.generator": "Ninja",
+    "cmake.preferredGenerators": [
+        "Ninja",
+        "Unix Makefiles",
+        "Visual Studio 17 2022"
+    ],
+    "cmake.buildTask": true,
+    "cmake.debugConfig": {
+        "symbolSearchPath": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}",
+        "additionalSOLibSearchPath": "${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}"
+    },
+    // Files Configuration
+    "files.exclude": {
+        "**/out/build": true,
+        "**/out/install": true,
+        "**/.cache": true,
+        "**/vcpkg_installed": true,
+        "**/_deps": true,
+        "**/*.vcxproj*": true,
+        "**/*.sln": true,
+        "**/CMakeFiles": true,
+        "**/CMakeCache.txt": true
+    },
+    "files.watcherExclude": {
+        "**/out/**": true,
+        "**/.cache/**": true,
+        "**/vcpkg_installed/**": true,
+        "**/_deps/**": true
+    },
     "files.associations": {
+        "*.hpp": "cpp",
+        "*.cpp": "cpp",
+        "*.h": "c",
+        "*.c": "c",
+        "CMakeLists.txt": "cmake",
+        "*.cmake": "cmake",
+        "*.cmake.in": "cmake",
         "charconv": "cpp",
         "chrono": "cpp",
         "format": "cpp",
@@ -15,6 +55,121 @@
         "xlocmon": "cpp",
         "xlocnum": "cpp",
         "xloctime": "cpp",
-        "xmemory": "cpp"
-    }
+        "xmemory": "cpp",
+        "algorithm": "cpp",
+        "array": "cpp",
+        "atomic": "cpp",
+        "bit": "cpp",
+        "cctype": "cpp",
+        "cmath": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "cstddef": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "cstring": "cpp",
+        "cwchar": "cpp",
+        "exception": "cpp",
+        "functional": "cpp",
+        "initializer_list": "cpp",
+        "ios": "cpp",
+        "iosfwd": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "iterator": "cpp",
+        "limits": "cpp",
+        "new": "cpp",
+        "ostream": "cpp",
+        "stdexcept": "cpp",
+        "streambuf": "cpp",
+        "string": "cpp",
+        "system_error": "cpp",
+        "thread": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "typeinfo": "cpp",
+        "utility": "cpp",
+        "vector": "cpp",
+        "xfacet": "cpp",
+        "xiosbase": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp"
+    },
+    // File Watcher Configuration
+    "files.watcherInclude": [
+        "**/*.{cpp,hpp,h,c,cc,cxx}",
+        "**/CMakeLists.txt",
+        "**/*.cmake"
+    ],
+    // Git Configuration
+    "git.ignoreLimitWarning": true,
+    "git.autofetch": true,
+    // Search Configuration  
+    "search.exclude": {
+        "**/out": true,
+        "**/.cache": true,
+        "**/vcpkg_installed": true,
+        "**/_deps": true,
+        "**/node_modules": true,
+        "**/*.code-search": true
+    },
+    // Problem Matchers
+    "problems.decorations.enabled": true,
+    "problems.showCurrentInStatus": true,
+    "problems.sortOrder": "severity",
+    "problems.autoReveal": true,
+    // Error Lens Configuration (for inline error display)
+    "errorLens.enabledDiagnosticLevels": [
+        "error",
+        "warning",
+        "info",
+        "hint"
+    ],
+    "errorLens.enabled": true,
+    "errorLens.enableOnDiffView": true,
+    "errorLens.followCursor": "allLinesExceptActive",
+    "errorLens.gutterIconsEnabled": true,
+    "errorLens.statusBarIconsEnabled": true,
+    "errorLens.messageTemplate": "$message",
+    "errorLens.severityText": [
+        "ERROR",
+        "WARNING",
+        "INFO",
+        "HINT"
+    ],
+    "errorLens.enabledInMergeConflict": true,
+    // Clangd Configuration
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/out/build/${command:cmake.activeConfigurePresetName}",
+        "--background-index",
+        "--background-index-priority=normal",
+        "--clang-tidy",
+        "--clang-tidy-checks=*",
+        "--completion-style=bundled",
+        "--header-insertion=iwyu",
+        "--cross-file-rename",
+        "--log=info",
+        "--pretty",
+        "--function-arg-placeholders=true",
+        "--fallback-style=file",
+        "--all-scopes-completion",
+        "--suggest-missing-includes",
+        "--pch-storage=memory",
+        "--limit-results=0",
+        "--limit-references=0"
+    ],
+    "clangd.path": "clangd.exe",
+    "clangd.checkUpdates": true,
+    "clangd.onConfigChanged": "restart",
+    // IntelliSense Configuration
+    "C_Cpp.autocomplete": "disabled",
+    "C_Cpp.suggestSnippets": false,
+    "C_Cpp.vcFormat.indent.braces": false,
+    "C_Cpp.vcFormat.indent.multiLineRelativeTo": "innermostParenthesis",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.namespace": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.type": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.function": "ignore",
+    "C_Cpp.vcFormat.newLine.beforeOpenBrace.block": "ignore",
+    "C_Cpp.vcFormat.space.beforeFunctionOpenParenthesis": "ignore"
 }

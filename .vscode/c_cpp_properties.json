@@ -1,0 +1,73 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "${workspaceFolder}/tests/**",
+                "${workspaceFolder}/out/build/windows/_deps/*/include",
+                "${workspaceFolder}/out/build/windows/vcpkg_installed/*/include",
+                "${vcpkgRoot}/installed/*/include",
+                "C:/Program Files (x86)/Windows Kits/10/Include/*/um",
+                "C:/Program Files (x86)/Windows Kits/10/Include/*/shared",
+                "C:/Program Files (x86)/Windows Kits/10/Include/*/winrt",
+                "C:/Program Files (x86)/Windows Kits/10/Include/*/cppwinrt"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "_WIN32_WINNT=0x0A00",
+                "WINVER=0x0A00",
+                "_CRT_SECURE_NO_WARNINGS",
+                "NOMINMAX"
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "compilerPath": "clang++.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "windows-clang-x64",
+            "compileCommands": "${workspaceFolder}/out/build/windows/compile_commands.json",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/tests",
+                    "${workspaceFolder}/out/build/windows/_deps",
+                    "${workspaceFolder}/out/build/windows/vcpkg_installed"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
+            }
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "${workspaceFolder}/tests/**",
+                "${workspaceFolder}/out/build/linux/_deps/*/include",
+                "${workspaceFolder}/out/build/linux/vcpkg_installed/*/include",
+                "/usr/include",
+                "/usr/local/include"
+            ],
+            "defines": [
+                "_DEBUG"
+            ],
+            "compilerPath": "clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "linux-clang-x64",
+            "compileCommands": "${workspaceFolder}/out/build/linux/compile_commands.json",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/tests",
+                    "${workspaceFolder}/out/build/linux/_deps",
+                    "${workspaceFolder}/out/build/linux/vcpkg_installed"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
+            }
+        }
+    ],
+    "version": 4
+}

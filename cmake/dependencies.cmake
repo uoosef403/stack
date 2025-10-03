@@ -7,7 +7,7 @@ find_package(Boost REQUIRED)
 find_package(Boost REQUIRED COMPONENTS asio)
 
 # fmt formatting library
-find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 # libtins network packet library
 set(LIBTINS_ENABLE_PCAP OFF CACHE BOOL "Disable libpcap/Npcap dependency")

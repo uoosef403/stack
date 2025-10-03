@@ -29,4 +29,4 @@ namespace stack::proxy {
         FlowErrorCallback on_error_;
         asio::ip::tcp::socket real_socket_; // The real socket to the proxy server
     };
-}
+}  // namespace stack::proxy

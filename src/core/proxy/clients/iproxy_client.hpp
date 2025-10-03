@@ -18,4 +18,4 @@ public:
   connect(const stack::network::ConnectionId &destination) = 0;
 };
 
-} // namespace proxy::clients
+}  // namespace stack::proxy::clients
