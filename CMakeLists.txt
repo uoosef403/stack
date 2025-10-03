@@ -83,243 +83,65 @@ endif()
 find_package(Threads REQUIRED)
 
 # =============================================================================
-# Dependencies
-# =============================================================================
-# Boost libraries
-find_package(Boost REQUIRED)
-find_package(Boost REQUIRED COMPONENTS asio)
-
-# fmt formatting library
-find_package(fmt CONFIG REQUIRED)
-
-# Google Test testing framework
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.14.0
-)
-
-# Configure Google Test
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-# Enable testing
-enable_testing()
-include(GoogleTest)
-
-# libtins network packet library (with custom configuration)
-set(LIBTINS_ENABLE_PCAP OFF CACHE BOOL "Disable libpcap/Npcap dependency")
-set(LIBTINS_ENABLE_DOT11 OFF CACHE BOOL "Disable 802.11 features that need pcap")
-set(LIBTINS_BUILD_EXAMPLES OFF CACHE BOOL "Don't build examples")
-set(LIBTINS_BUILD_TESTS OFF CACHE BOOL "Don't build tests")
-set(LIBTINS_BUILD_SHARED OFF CACHE BOOL "Build a static library")
-set(LIBTINS_ENABLE_ACK_TRACKER OFF CACHE BOOL "Disable TCP ACK tracker feature")
-set(LIBTINS_ENABLE_TCP_STREAM_CUSTOM_DATA OFF CACHE BOOL "Disable TCP stream custom data")
-
-FetchContent_Declare(
-    libtins
-    GIT_REPOSITORY https://github.com/uoosef403/libtins
-)
-
-FetchContent_MakeAvailable(libtins)
-
-# Configure libtins as static library
-target_compile_definitions(tins INTERFACE TINS_STATIC)
-
-# =============================================================================
-# Source Files
+# CMake Module Path
 # =============================================================================
 
-# Collect all source and header files recursively
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-)
-file(GLOB_RECURSE CORE_HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
-)
+# Add cmake modules directory to module path
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # =============================================================================
-# Target Configuration
+# Dependencies and Configuration
 # =============================================================================
 
-# Create main executable
-add_executable(${PROJECT_NAME} main.cpp ${CORE_SOURCES})
+# Load dependency configuration
+include(dependencies)
 
-# Compiler warning configuration
-target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
-)
+# Load platform-specific configuration  
+include(platform)
 
-# Include directories
-target_include_directories(${PROJECT_NAME} PUBLIC src)
+# Load library configuration
+include(library)
 
-# System include for libtins to avoid compiler warnings
-target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${libtins_SOURCE_DIR}/include)
+# Load testing configuration
+include(testing)
 
-# Configure target file sets for headers
-target_sources(${PROJECT_NAME} PRIVATE
-    FILE_SET HEADERS
-    BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/src
-    FILES ${CORE_HEADERS}
-)
+# =============================================================================
+# Main Executable
+# =============================================================================
 
-# Compile definitions
-target_compile_definitions(${PROJECT_NAME} PRIVATE 
-    BOOST_ASIO_HAS_CO_AWAIT
-)
+# Create main executable (only main.cpp, no core sources)
+add_executable(${PROJECT_NAME} main.cpp)
 
-# Link dependencies using modern CMake targets
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    Boost::asio
-    fmt::fmt
-    tins
-    Threads::Threads
-)
+# Link against our library - inherits all settings automatically
+target_link_libraries(${PROJECT_NAME} PRIVATE stack::lib)
+
+# Apply platform-specific configuration to main executable
+configure_platform_target(${PROJECT_NAME})
 
 # =============================================================================
 # Development Tools
 # =============================================================================
 
 # Copy compile commands to source root for clangd
-execute_process(
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    ${CMAKE_BINARY_DIR}/compile_commands.json
-    ${CMAKE_SOURCE_DIR}/compile_commands.json
-)
-
-# =============================================================================
-# Platform-Specific Configuration
-# =============================================================================
-
-# Windows-specific settings and dependencies
-if(WIN32)
-    # Windows API definitions
-    target_compile_definitions(${PROJECT_NAME} PRIVATE _WIN32_WINNT=0x0601)
-    
-    # Windows system libraries
-    target_link_libraries(${PROJECT_NAME} PRIVATE 
-        iphlpapi 
-        winmm 
-        ws2_32 
-        Rpcrt4
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    add_custom_target(copy_compile_commands ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_BINARY_DIR}/compile_commands.json
+        ${CMAKE_SOURCE_DIR}/compile_commands.json
+        COMMENT "Copying compile commands for clangd"
     )
-
-    # WinTun VPN adapter library
-    FetchContent_Declare(
-        wintun
-        URL "https://www.wintun.net/builds/wintun-0.14.1.zip"
-        URL_HASH SHA256=07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
-    )
-    FetchContent_MakeAvailable(wintun)
-
-    # Set WinTun directories for global use
-    set(WINTUN_DIR ${wintun_SOURCE_DIR})
-    
-    # Debug: Print WinTun directory for troubleshooting
-    message(STATUS "WinTun directory: ${WINTUN_DIR}")
-    message(STATUS "WinTun include directory: ${WINTUN_DIR}/include")
-    
-    # Verify WinTun header exists
-    if(NOT EXISTS "${WINTUN_DIR}/include/wintun.h")
-        message(FATAL_ERROR "WinTun header not found at ${WINTUN_DIR}/include/wintun.h")
-    else()
-        message(STATUS "WinTun header found at ${WINTUN_DIR}/include/wintun.h")
-    endif()
-    
-    # Add WinTun include directory to main target
-    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${WINTUN_DIR}/include)
-    
-    # Determine architecture-specific DLL path
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64")
-            set(WINTUN_ARCH_DIR "bin/arm64")
-        else()
-            set(WINTUN_ARCH_DIR "bin/amd64")
-        endif()
-    else()
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM")
-            set(WINTUN_ARCH_DIR "bin/arm")
-        else()
-            set(WINTUN_ARCH_DIR "bin/x86")
-        endif()
-    endif()
-
-    set(WINTUN_DLL "${WINTUN_DIR}/${WINTUN_ARCH_DIR}/wintun.dll")
-
-    # Function to copy WinTun DLL to executable directory
-    function(copy_wintun_dll TARGET_NAME)
-        # Copy DLL to output directory after build
-        add_custom_command(
-            TARGET ${TARGET_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${WINTUN_DLL}"
-            "$<TARGET_FILE_DIR:${TARGET_NAME}>/wintun.dll"
-            COMMENT "Copying wintun.dll for target ${TARGET_NAME}"
-        )
-    endfunction()
-
-    # Apply WinTun configuration to main target
-    copy_wintun_dll(${PROJECT_NAME})
 endif()
 
 # =============================================================================
-# Testing Configuration
+# Build Summary
 # =============================================================================
 
-# Collect test files
-file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
-)
-
-# Only create test targets if test files exist
-if(TEST_SOURCES)
-    # Create test executable
-    add_executable(${PROJECT_NAME}_tests ${TEST_SOURCES} ${CORE_SOURCES})
-    
-    # Configure test target with same settings as main target
-    target_compile_options(${PROJECT_NAME}_tests PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
-        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
-    )
-    
-    # Include directories for tests
-    target_include_directories(${PROJECT_NAME}_tests PRIVATE 
-        src
-        ${libtins_SOURCE_DIR}/include
-    )
-    
-    # Link test dependencies
-    target_link_libraries(${PROJECT_NAME}_tests PRIVATE
-        gtest_main
-        gmock_main
-        Boost::asio
-        fmt::fmt
-        tins
-        Threads::Threads
-    )
-    
-    # Platform-specific test linking
-    if(WIN32)
-        target_compile_definitions(${PROJECT_NAME}_tests PRIVATE _WIN32_WINNT=0x0601)
-        target_link_libraries(${PROJECT_NAME}_tests PRIVATE 
-            iphlpapi 
-            winmm 
-            ws2_32 
-            Rpcrt4
-        )
-        
-        # Add WinTun include directory to test target
-        target_include_directories(${PROJECT_NAME}_tests SYSTEM PRIVATE ${WINTUN_DIR}/include)
-        
-        # Copy WinTun DLL for test target
-        copy_wintun_dll(${PROJECT_NAME}_tests)
-    endif()
-    
-    # Discover and register tests
-    gtest_discover_tests(${PROJECT_NAME}_tests)
-    
-    message(STATUS "Test executable '${PROJECT_NAME}_tests' will be created")
-else()
-    message(STATUS "No test files found in tests/ directory - skipping test target creation")
-endif()
+message(STATUS "")
+message(STATUS "=== Stack Network Library Configuration Summary ===")
+message(STATUS "Project Version: ${PROJECT_VERSION}")  
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "Architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
+message(STATUS "")
