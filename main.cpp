@@ -1,11 +1,10 @@
-#include "config.hpp"
+#include "core/config/config.hpp"
 #include "core/dispatcher.hpp"
 #include "core/handlers/icmp_handler.hpp"
 #include "core/handlers/tcp_handler.hpp"
 #include "core/logging/logger.hpp"
 #include "core/proxy/clients/socks5/client.hpp"
 #include "device/tun.h"
-
 
 int main(int argc, char *argv[]) {
 #ifdef DEBUG
@@ -59,8 +58,8 @@ int main(int argc, char *argv[]) {
 
     // --- 3. Create TUN Device with Configuration ---
     const auto tun_device = stack::device::create_tun(
-        io_context, net_config.interface_name.c_str(),
-        net_config.interface_ip.c_str(), net_config.interface_netmask.c_str(),
+        io_context, net_config.interface_name, net_config.interface_ip,
+        net_config.interface_netmask,
         "fd69::69", // TODO: Add IPv6 configuration
         64          // TODO: Add IPv6 prefix configuration
     );

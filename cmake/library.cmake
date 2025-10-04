@@ -73,6 +73,7 @@ target_link_libraries(stack_lib
         Boost::system
         Boost::filesystem
         spdlog::spdlog
+        tomlplusplus::tomlplusplus
         Threads::Threads
         tins  # Make tins PUBLIC so executables inherit its SYSTEM includes
 )

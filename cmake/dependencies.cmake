@@ -6,6 +6,9 @@
 find_package(Boost REQUIRED)
 find_package(Boost REQUIRED COMPONENTS asio program_options system filesystem)
 
+# TOML++ library
+find_package(tomlplusplus CONFIG REQUIRED)
+
 # fmt formatting library
 find_package(spdlog CONFIG REQUIRED)
 

@@ -124,7 +124,7 @@ show_help() {
     echo "  ./build/stack"
     echo ""
     echo "  # Run with custom config file"
-    echo "  ./build/stack --config examples/production-proxy.ini"
+    echo "  ./build/stack --config examples/production-proxy.toml"
     echo ""
     echo "  # Run with command-line options"
     echo "  ./build/stack --socks5-host proxy.example.com --log-level debug"

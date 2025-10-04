@@ -10,7 +10,7 @@ class Logger {
 public:
   static void init() {
     // Set a clean, professional pattern for all loggers
-    spdlog::set_pattern("%^[%H:%M:%S] [%l] %v%$");
+    spdlog::set_pattern("%^[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v%$");
 
     // Get the default console logger
     s_logger_ = spdlog::default_logger();
@@ -18,6 +18,7 @@ public:
     // Set the default log level. Change this to spdlog::level::info for
     // production.
     s_logger_->set_level(spdlog::level::info);
+    s_logger_->flush_on(spdlog::level::err);
   }
 
   static std::shared_ptr<spdlog::logger> &get() { return s_logger_; }

@@ -61,7 +61,7 @@ function Show-Help {
     Write-Host "  .\build\stack.exe"
     Write-Host ""
     Write-Host "  # Run with custom config file"
-    Write-Host "  .\build\stack.exe --config examples\production-proxy.ini"
+    Write-Host "  .\build\stack.exe --config examples\production-proxy.toml"
     Write-Host ""
     Write-Host "  # Run with command-line options"
     Write-Host "  .\build\stack.exe --socks5-host proxy.example.com --log-level debug"

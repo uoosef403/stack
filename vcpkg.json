@@ -4,7 +4,8 @@
     "boost-system",
     "boost-filesystem",
     "boost-asio",
-    "spdlog"
+    "spdlog",
+    "tomlplusplus"
   ],
   "version": "0.1.0",
   "name": "stack"

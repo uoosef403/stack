@@ -40,44 +40,44 @@ cmake --build --preset default
 ./build/stack
 
 # Run with custom configuration
-./build/stack --config config.ini --socks5-host proxy.example.com --log-level debug
+./build/stack --config config.toml --socks5-host proxy.example.com --log-level debug
 ```
 
 ### Configuration
 
 The network stack supports both configuration files and command-line arguments for maximum flexibility.
 
-#### Configuration File (config.ini)
+#### Configuration File (config.toml)
 
-```ini
+```toml
 [network]
-interface_name=tun0
-interface_ip=10.0.0.1
-interface_netmask=255.255.255.0
-mtu=1500
+interface_name = "tun0"
+interface_ip = "10.0.0.1"
+interface_netmask = "255.255.255.0"
+mtu = 1500
 
 [proxy]
-enable_socks5=true
-socks5_host=127.0.0.1
-socks5_port=1080
+enable_socks5 = true
+socks5_host = "127.0.0.1"
+socks5_port = 1080
 
 [logging]
-log_level=info
-console_output=true
+log_level = "info"
+console_output = true
 
 [tcp]
-connection_timeout_ms=30000
-keep_alive_interval_ms=60000
-max_connections=1000
-buffer_size=65536
+connection_timeout_ms = 30000
+keep_alive_interval_ms = 60000
+max_connections = 1000
+buffer_size = 65536
 
 [udp]
-timeout_ms=5000
-max_connections=500
+timeout_ms = 5000
+max_connections = 500
 
 [icmp]
-enable=true
-timeout_ms=5000
+enable = true
+timeout_ms = 5000
 ```
 
 #### Command Line Arguments
@@ -141,7 +141,7 @@ Options:
 ./stack --socks5-enable --socks5-host proxy.example.com --socks5-port 1080
 
 # SOCKS5 with authentication (use config file for credentials)
-./stack --config secure-proxy.ini
+./stack --config secure-proxy.toml
 ```
 
 ### Performance Tuning
