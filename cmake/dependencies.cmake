@@ -4,7 +4,7 @@
 
 # Boost libraries
 find_package(Boost REQUIRED)
-find_package(Boost REQUIRED COMPONENTS asio)
+find_package(Boost REQUIRED COMPONENTS asio program_options system filesystem)
 
 # fmt formatting library
 find_package(spdlog CONFIG REQUIRED)

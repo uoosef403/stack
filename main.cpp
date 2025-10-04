@@ -1,11 +1,11 @@
-#include "core/logging/logger.hpp"
-
+#include "config.hpp"
 #include "core/dispatcher.hpp"
 #include "core/handlers/icmp_handler.hpp"
 #include "core/handlers/tcp_handler.hpp"
+#include "core/logging/logger.hpp"
 #include "core/proxy/clients/socks5/client.hpp"
 #include "device/tun.h"
-#include <filesystem>
+
 
 int main(int argc, char *argv[]) {
 #ifdef DEBUG
@@ -13,83 +13,96 @@ int main(int argc, char *argv[]) {
 #endif
 
   try {
-    constexpr auto TUN_NAME = "tun0";
-    constexpr auto TUN_IP4 = "192.168.69.69";
-    constexpr auto TUN_IP4_MASK = "255.255.255.0";
-    constexpr auto TUN_IP6 = "fd69::69";
-    constexpr auto TUN_IP6_PREFIX_MASK = 64;
-
     constexpr auto ICMP_HANDLER_NUMBER = 1;
     constexpr auto TCP_HANDLER_NUMBER = 6;
 
-    // --- 1. Check for and Parse Command-Line Argument ---
-    // Initialize logging first
+    // --- 1. Initialize Configuration ---
+    Config &config = Config::getInstance();
+
+    // Parse command line arguments first
+    if (!config.parseCommandLine(argc, argv)) {
+      return 1; // Help was shown or error occurred
+    }
+
+    // Initialize logging with configured level
     stack::log::Logger::init();
 
-    if (argc < 2) {
-      // Extract just the executable name from the full path using std::filesystem
-      std::filesystem::path exe_path(argv[0]);
-      std::string exe_name = exe_path.filename().string();
-      LOG_ERROR("Usage: {} <socks5_ip:port>", exe_name);
-      return 1;
+    const auto &net_config = config.getNetworkConfig();
+    const auto &proxy_config = config.getProxyConfig();
+    const auto &icmp_config = config.getIcmpConfig();
+
+    LOG_INFO("Starting Network Stack");
+    LOG_INFO("Interface: {} ({})", net_config.interface_name,
+             net_config.interface_ip);
+
+    if (proxy_config.enable_socks5) {
+      LOG_INFO("SOCKS5 Proxy: {}:{}", proxy_config.socks5_host,
+               proxy_config.socks5_port);
+    } else {
+      LOG_WARN("SOCKS5 proxy is disabled - direct connections will be used");
     }
 
-    std::string socks_arg(argv[1]);
-    size_t colon_pos = socks_arg.find_last_of(':');
-    if (colon_pos == std::string::npos) {
-      throw std::runtime_error(
-          "Invalid SOCKS endpoint format. Expected ip:port");
+    // --- 2. Create SOCKS5 Endpoint from Configuration ---
+    asio::ip::tcp::endpoint socks_endpoint;
+    if (proxy_config.enable_socks5) {
+      boost::system::error_code ec;
+      auto socks_ip = asio::ip::make_address(proxy_config.socks5_host, ec);
+      if (ec) {
+        throw std::runtime_error(
+            "Invalid SOCKS5 IP address in configuration: " + ec.message());
+      }
+      socks_endpoint =
+          asio::ip::tcp::endpoint(socks_ip, proxy_config.socks5_port);
     }
-
-    std::string socks_ip_str = socks_arg.substr(0, colon_pos);
-    std::string socks_port_str = socks_arg.substr(colon_pos + 1);
-
-    // --- 2. Convert Strings and Create the Endpoint ---
-    boost::system::error_code ec;
-    auto socks_ip = asio::ip::make_address(socks_ip_str, ec);
-    if (ec) {
-      throw std::runtime_error("Invalid SOCKS IP address: " + ec.message());
-    }
-
-    unsigned long socks_port_ul = std::stoul(socks_port_str);
-    if (socks_port_ul > 65535) {
-      throw std::runtime_error("Invalid SOCKS port number: " +
-                               std::to_string(socks_port_ul));
-    }
-
-    asio::ip::tcp::endpoint socks_endpoint(
-        socks_ip, static_cast<uint16_t>(socks_port_ul));
-
-    LOG_INFO("Proxying through SOCKS5 server at {}:{}",
-             socks_endpoint.address().to_string(), socks_endpoint.port());
 
     asio::io_context io_context;
 
-    const auto tun_device =
-        stack::device::create_tun(io_context, TUN_NAME, TUN_IP4, TUN_IP4_MASK,
-                                  TUN_IP6, TUN_IP6_PREFIX_MASK);
+    // --- 3. Create TUN Device with Configuration ---
+    const auto tun_device = stack::device::create_tun(
+        io_context, net_config.interface_name.c_str(),
+        net_config.interface_ip.c_str(), net_config.interface_netmask.c_str(),
+        "fd69::69", // TODO: Add IPv6 configuration
+        64          // TODO: Add IPv6 prefix configuration
+    );
 
     IPPacketChannel incoming_channel(io_context, 128);
     IPPacketChannel outgoing_channel(io_context, 128);
 
     Dispatcher dispatcher(io_context.get_executor(), incoming_channel);
-    auto icmp_handler = std::make_unique<stack::handlers::IcmpHandler>(
-        io_context.get_executor(), outgoing_channel, TUN_IP4, TUN_IP6);
 
-    // Use the type alias to declare your factory lambda
-    stack::handlers::ProxyClientFactory socks5_factory =
-        [&]() -> std::unique_ptr<stack::proxy::clients::IProxyClient> {
-      return std::make_unique<stack::proxy::clients::Socks5Client>(
-          io_context.get_executor(), socks_endpoint);
-    };
+    // --- 4. Initialize Protocol Handlers with Configuration ---
+    std::unique_ptr<stack::handlers::IcmpHandler> icmp_handler;
+    if (icmp_config.enable) {
+      icmp_handler = std::make_unique<stack::handlers::IcmpHandler>(
+          io_context.get_executor(), outgoing_channel,
+          net_config.interface_ip.c_str(), "fd69::69");
+      dispatcher.register_handler(ICMP_HANDLER_NUMBER, std::move(icmp_handler));
+      LOG_INFO("ICMP handler enabled");
+    } else {
+      LOG_INFO("ICMP handler disabled");
+    }
+
+    // Create proxy client factory based on configuration
+    stack::handlers::ProxyClientFactory proxy_factory;
+    if (proxy_config.enable_socks5) {
+      proxy_factory = [&, socks_endpoint]()
+          -> std::unique_ptr<stack::proxy::clients::IProxyClient> {
+        return std::make_unique<stack::proxy::clients::Socks5Client>(
+            io_context.get_executor(), socks_endpoint);
+      };
+    } else {
+      // TODO: Implement direct connection factory when SOCKS5 is disabled
+      LOG_WARN(
+          "Direct connections not yet implemented, using null proxy factory");
+      proxy_factory =
+          []() -> std::unique_ptr<stack::proxy::clients::IProxyClient> {
+        return nullptr;
+      };
+    }
 
     auto tcp_handler = std::make_unique<stack::handlers::TcpHandler>(
-        io_context.get_executor(), outgoing_channel,
-        socks5_factory // Pass the factory
-    );
+        io_context.get_executor(), outgoing_channel, proxy_factory);
 
-    // Register it to handle (ICMP).
-    dispatcher.register_handler(ICMP_HANDLER_NUMBER, std::move(icmp_handler));
     dispatcher.register_handler(TCP_HANDLER_NUMBER, std::move(tcp_handler));
 
     asio::co_spawn(io_context, tun_device->run_reader(incoming_channel),

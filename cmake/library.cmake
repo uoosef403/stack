@@ -69,6 +69,9 @@ target_compile_definitions(stack_lib PUBLIC
 target_link_libraries(stack_lib 
     PUBLIC
         Boost::asio
+        Boost::program_options
+        Boost::system
+        Boost::filesystem
         spdlog::spdlog
         Threads::Threads
         tins  # Make tins PUBLIC so executables inherit its SYSTEM includes
