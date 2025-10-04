@@ -1,29 +1,23 @@
 #pragma once
 
 #include <memory>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
+
+struct LoggingConfig; // Forward declaration
 
 namespace stack::log {
 
 class Logger {
 public:
-  static void init() {
-    // Set a clean, professional pattern for all loggers
-    spdlog::set_pattern("%^[%Y-%m-%d %H:%M:%S.%e] [%t] [%l] %v%$");
-
-    // Get the default console logger
-    s_logger_ = spdlog::default_logger();
-
-    // Set the default log level. Change this to spdlog::level::info for
-    // production.
-    s_logger_->set_level(spdlog::level::info);
-    s_logger_->flush_on(spdlog::level::err);
-  }
+  static void init(const LoggingConfig &config);
 
   static std::shared_ptr<spdlog::logger> &get() { return s_logger_; }
 
 private:
+  static spdlog::level::level_enum parse_log_level(const std::string &level);
   inline static std::shared_ptr<spdlog::logger> s_logger_;
 };
 

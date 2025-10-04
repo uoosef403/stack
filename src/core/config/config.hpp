@@ -9,6 +9,8 @@ struct NetworkConfig {
   std::string interface_name = "tun0";
   std::string interface_ip = "10.0.0.1";
   std::string interface_netmask = "255.255.255.0";
+  std::string ipv6_address = "fd69::69";
+  uint8_t ipv6_prefix = 64;
   uint16_t mtu = 1500;
 };
 
@@ -45,19 +47,19 @@ struct IcmpConfig {
 
 class Config {
 public:
-  static Config &getInstance();
+  static Config &get_instance();
 
-  bool loadFromFile(const std::string &filename);
-  bool parseCommandLine(int argc, char *argv[]);
-  void printHelp() const;
+  bool load_from_file(const std::string &filename);
+  bool parse_command_line(int argc, char *argv[]);
+  static void print_help();
 
   // Getters
-  const NetworkConfig &getNetworkConfig() const { return network_config_; }
-  const ProxyConfig &getProxyConfig() const { return proxy_config_; }
-  const LoggingConfig &getLoggingConfig() const { return logging_config_; }
-  const TcpConfig &getTcpConfig() const { return tcp_config_; }
-  const UdpConfig &getUdpConfig() const { return udp_config_; }
-  const IcmpConfig &getIcmpConfig() const { return icmp_config_; }
+  const NetworkConfig &get_network_config() const { return network_config_; }
+  const ProxyConfig &get_proxy_config() const { return proxy_config_; }
+  const LoggingConfig &get_logging_config() const { return logging_config_; }
+  const TcpConfig &get_tcp_config() const { return tcp_config_; }
+  const UdpConfig &get_udp_config() const { return udp_config_; }
+  const IcmpConfig &get_icmp_config() const { return icmp_config_; }
 
   Config(const Config &) = delete;
   Config &operator=(const Config &) = delete;
@@ -68,13 +70,13 @@ public:
 private:
   Config() = default;
 
-  void loadDefaults();
-  void loadNetworkConfig(const toml::table &config);
-  void loadProxyConfig(const toml::table &config);
-  void loadLoggingConfig(const toml::table &config);
-  void loadTcpConfig(const toml::table &config);
-  void loadUdpConfig(const toml::table &config);
-  void loadIcmpConfig(const toml::table &config);
+  void load_defaults();
+  void load_network_config(const toml::table &config);
+  void load_proxy_config(const toml::table &config);
+  void load_logging_config(const toml::table &config);
+  void load_tcp_config(const toml::table &config);
+  void load_udp_config(const toml::table &config);
+  void load_icmp_config(const toml::table &config);
 
   NetworkConfig network_config_;
   ProxyConfig proxy_config_;

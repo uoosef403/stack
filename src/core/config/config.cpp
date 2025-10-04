@@ -3,16 +3,15 @@
 #include <boost/program_options.hpp>
 #include <iostream>
 
-
 namespace po = boost::program_options;
 namespace fs = boost::filesystem;
 
-Config &Config::getInstance() {
+Config &Config::get_instance() {
   static Config instance;
   return instance;
 }
 
-void Config::loadDefaults() {
+void Config::load_defaults() {
   // Network defaults
   network_config_ = NetworkConfig{};
 
@@ -32,40 +31,39 @@ void Config::loadDefaults() {
   icmp_config_ = IcmpConfig{};
 }
 
-bool Config::loadFromFile(const std::string &filename) {
+bool Config::load_from_file(const std::string &filename) {
   if (!fs::exists(filename)) {
-    std::cerr << "Configuration file not found: " << filename << std::endl;
+    std::cerr << "Configuration file not found: " << filename << '\n';
     return false;
   }
 
   try {
     // Load defaults first
-    loadDefaults();
+    load_defaults();
 
     // Parse TOML file
     auto config = toml::parse_file(filename);
 
     // Load each section
-    loadNetworkConfig(config);
-    loadProxyConfig(config);
-    loadLoggingConfig(config);
-    loadTcpConfig(config);
-    loadUdpConfig(config);
-    loadIcmpConfig(config);
+    load_network_config(config);
+    load_proxy_config(config);
+    load_logging_config(config);
+    load_tcp_config(config);
+    load_udp_config(config);
+    load_icmp_config(config);
 
     return true;
   } catch (const toml::parse_error &e) {
-    std::cerr << "TOML parsing error in " << filename << ":\n"
-              << e << std::endl;
+    std::cerr << "TOML parsing error in " << filename << ":\n" << e << '\n';
     return false;
   } catch (const std::exception &e) {
-    std::cerr << "Error loading configuration file: " << e.what() << std::endl;
+    std::cerr << "Error loading configuration file: " << e.what() << '\n';
     return false;
   }
 }
 
-void Config::loadNetworkConfig(const toml::table &config) {
-  if (auto network = config["network"].as_table()) {
+void Config::load_network_config(const toml::table &config) {
+  if (const auto *network = config["network"].as_table()) {
     if (auto interface_name =
             (*network)["interface_name"].value<std::string>()) {
       network_config_.interface_name = *interface_name;
@@ -77,14 +75,20 @@ void Config::loadNetworkConfig(const toml::table &config) {
             (*network)["interface_netmask"].value<std::string>()) {
       network_config_.interface_netmask = *interface_netmask;
     }
+    if (auto ipv6_address = (*network)["ipv6_address"].value<std::string>()) {
+      network_config_.ipv6_address = *ipv6_address;
+    }
+    if (auto ipv6_prefix = (*network)["ipv6_prefix"].value<uint8_t>()) {
+      network_config_.ipv6_prefix = *ipv6_prefix;
+    }
     if (auto mtu = (*network)["mtu"].value<uint16_t>()) {
       network_config_.mtu = *mtu;
     }
   }
 }
 
-void Config::loadProxyConfig(const toml::table &config) {
-  if (auto proxy = config["proxy"].as_table()) {
+void Config::load_proxy_config(const toml::table &config) {
+  if (const auto *proxy = config["proxy"].as_table()) {
     if (auto enable_socks5 = (*proxy)["enable_socks5"].value<bool>()) {
       proxy_config_.enable_socks5 = *enable_socks5;
     }
@@ -105,8 +109,8 @@ void Config::loadProxyConfig(const toml::table &config) {
   }
 }
 
-void Config::loadLoggingConfig(const toml::table &config) {
-  if (auto logging = config["logging"].as_table()) {
+void Config::load_logging_config(const toml::table &config) {
+  if (const auto *logging = config["logging"].as_table()) {
     if (auto log_level = (*logging)["log_level"].value<std::string>()) {
       logging_config_.log_level = *log_level;
     }
@@ -119,8 +123,8 @@ void Config::loadLoggingConfig(const toml::table &config) {
   }
 }
 
-void Config::loadTcpConfig(const toml::table &config) {
-  if (auto tcp = config["tcp"].as_table()) {
+void Config::load_tcp_config(const toml::table &config) {
+  if (const auto *tcp = config["tcp"].as_table()) {
     if (auto connection_timeout_ms =
             (*tcp)["connection_timeout_ms"].value<uint32_t>()) {
       tcp_config_.connection_timeout_ms = *connection_timeout_ms;
@@ -138,8 +142,8 @@ void Config::loadTcpConfig(const toml::table &config) {
   }
 }
 
-void Config::loadUdpConfig(const toml::table &config) {
-  if (auto udp = config["udp"].as_table()) {
+void Config::load_udp_config(const toml::table &config) {
+  if (const auto *udp = config["udp"].as_table()) {
     if (auto timeout_ms = (*udp)["timeout_ms"].value<uint32_t>()) {
       udp_config_.timeout_ms = *timeout_ms;
     }
@@ -149,8 +153,8 @@ void Config::loadUdpConfig(const toml::table &config) {
   }
 }
 
-void Config::loadIcmpConfig(const toml::table &config) {
-  if (auto icmp = config["icmp"].as_table()) {
+void Config::load_icmp_config(const toml::table &config) {
+  if (const auto *icmp = config["icmp"].as_table()) {
     if (auto enable = (*icmp)["enable"].value<bool>()) {
       icmp_config_.enable = *enable;
     }
@@ -160,7 +164,7 @@ void Config::loadIcmpConfig(const toml::table &config) {
   }
 }
 
-bool Config::parseCommandLine(int argc, char *argv[]) {
+bool Config::parse_command_line(int argc, char *argv[]) {
   try {
     po::options_description desc("Network Stack Options");
     desc.add_options()("help,h", "Show this help message")(
@@ -207,40 +211,40 @@ bool Config::parseCommandLine(int argc, char *argv[]) {
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
 
-    if (vm.count("help")) {
-      std::cout << desc << std::endl;
+    if (vm.count("help")) { // NOLINT
+      std::cout << desc << '\n';
       return false;
     }
 
-    if (vm.count("config")) {
+    if (vm.count("config")) { // NOLINT
       std::string config_file = vm["config"].as<std::string>();
-      if (!loadFromFile(config_file)) {
+      if (!load_from_file(config_file)) {
         std::cerr << "Failed to load configuration file: " << config_file
-                  << std::endl;
+                  << '\n';
         return false;
       }
     } else {
       // Load defaults if no config file specified
-      loadDefaults();
+      load_defaults();
     }
 
-    if (vm.count("no-console")) {
+    if (vm.count("no-console")) { // NOLINT
       logging_config_.console_output = false;
     }
 
-    if (vm.count("no-icmp")) {
+    if (vm.count("no-icmp")) { // NOLINT
       icmp_config_.enable = false;
     }
 
     po::notify(vm);
     return true;
   } catch (const std::exception &e) {
-    std::cerr << "Error parsing command line: " << e.what() << std::endl;
+    std::cerr << "Error parsing command line: " << e.what() << '\n';
     return false;
   }
 }
 
-void Config::printHelp() const {
+void Config::print_help() {
   std::cout << R"(Network Stack - High Performance User-Space Network Stack
 
 Usage: stack [options]
