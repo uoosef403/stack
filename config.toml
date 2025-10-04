@@ -1,0 +1,40 @@
+# Network Stack Configuration File
+# This file uses TOML format
+
+[network]
+# TUN interface configuration
+interface_name = "tun0"
+interface_ip = "10.0.0.1"
+interface_netmask = "255.255.255.0"
+mtu = 1500
+
+[proxy]
+# SOCKS5 proxy configuration
+enable_socks5 = true
+socks5_host = "127.0.0.1"
+socks5_port = 1080
+# socks5_username = ""
+# socks5_password = ""
+
+[logging]
+# Logging configuration
+log_level = "info"
+console_output = true
+# log_file = "/var/log/network-stack.log"
+
+[tcp]
+# TCP protocol configuration
+connection_timeout_ms = 30000
+keep_alive_interval_ms = 60000
+max_connections = 1000
+buffer_size = 65536
+
+[udp]
+# UDP protocol configuration
+timeout_ms = 5000
+max_connections = 500
+
+[icmp]
+# ICMP protocol configuration
+enable = true
+timeout_ms = 5000
